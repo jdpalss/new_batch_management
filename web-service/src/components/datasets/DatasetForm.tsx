@@ -16,7 +16,6 @@ import { Dataset } from '../../types/dataset';
 import { DynamicField } from './DynamicField';
 import { validateFieldValue } from '../../utils/field';
 import { useToasts } from '../../hooks/useToasts';
-import { FIELD_TYPES } from '../../constants';
 
 interface DatasetFormProps {
   template: Template;
@@ -31,65 +30,36 @@ export const DatasetForm: React.FC<DatasetFormProps> = ({
 }) => {
   const { error } = useToasts();
 
-  // 템플릿 필드를 기반으로 validation schema 생성
+  // 데이터셋 초기값 설정
+  const defaultValues: Partial<Dataset> = {
+    name: '',
+    description: '',
+    templateId: template.id,
+    data: {},
+    ...initialValues
+  };
+
+  // 동적으로 데이터 초기값 설정
+  if (!initialValues?.data) {
+    defaultValues.data = template.fields.reduce(
+      (acc, field) => ({
+        ...acc,
+        [field.name]: field.defaultValue ?? null
+      }),
+      {}
+    );
+  }
+
   const validationSchema = Yup.object().shape({
-    name: Yup.string().required('Dataset name is required'),
+    name: Yup.string()
+      .trim()
+      .required('이름을 입력해주세요'),
     data: Yup.object().shape(
       template.fields.reduce((acc, field) => {
-        let fieldSchema;
-
-        switch (field.type) {
-          case FIELD_TYPES.NUMBER:
-            fieldSchema = Yup.number()
-              .typeError('Must be a number')
-              .nullable();
-            if (field.validation?.min !== undefined) {
-              fieldSchema = fieldSchema.min(field.validation.min);
-            }
-            if (field.validation?.max !== undefined) {
-              fieldSchema = fieldSchema.max(field.validation.max);
-            }
-            break;
-
-          case FIELD_TYPES.EMAIL:
-            fieldSchema = Yup.string()
-              .email('Must be a valid email')
-              .nullable();
-            break;
-
-          case FIELD_TYPES.DATE:
-            fieldSchema = Yup.date()
-              .typeError('Must be a valid date')
-              .nullable();
-            break;
-
-          case FIELD_TYPES.JSON:
-            fieldSchema = Yup.string()
-              .test('is-json', 'Must be valid JSON', value => {
-                if (!value) return true;
-                try {
-                  JSON.parse(value);
-                  return true;
-                } catch {
-                  return false;
-                }
-              })
-              .nullable();
-            break;
-
-          default:
-            fieldSchema = Yup.string().nullable();
-        }
-
+        let fieldSchema = Yup.mixed();
+        
         if (field.required) {
-          fieldSchema = fieldSchema.required(`${field.label} is required`);
-        }
-
-        if (field.validation?.pattern) {
-          fieldSchema = fieldSchema.matches(
-            new RegExp(field.validation.pattern),
-            field.validation.message || 'Invalid format'
-          );
+          fieldSchema = fieldSchema.required(`${field.label}은(는) 필수 항목입니다`);
         }
 
         return {
@@ -100,82 +70,54 @@ export const DatasetForm: React.FC<DatasetFormProps> = ({
     )
   });
 
-  // 데이터셋 초기값 설정
-  const defaultValues: Partial<Dataset> = {
-    name: '',
-    description: '',
-    templateId: template.id,
-    data: template.fields.reduce(
-      (acc, field) => ({
-        ...acc,
-        [field.name]: field.defaultValue ?? null
-      }),
-      {}
-    ),
-    ...initialValues
-  };
-
   return (
     <Formik
       initialValues={defaultValues}
       validationSchema={validationSchema}
       onSubmit={async (values, { setSubmitting }) => {
         try {
-          // 커스텀 유효성 검사 수행
-          const fieldErrors: string[] = [];
-          for (const field of template.fields) {
-            const value = values.data[field.name];
-            const validationError = validateFieldValue(value, field.type);
-            if (validationError) {
-              fieldErrors.push(`${field.label}: ${validationError}`);
-            }
-          }
-
-          if (fieldErrors.length > 0) {
-            error(fieldErrors.join('\n'));
-            return;
-          }
-
           await onSubmit(values);
         } catch (err) {
-          error(err instanceof Error ? err.message : 'Failed to save dataset');
+          error(err instanceof Error ? err.message : '데이터셋 저장에 실패했습니다');
         } finally {
           setSubmitting(false);
         }
       }}
     >
-      {({ values, errors, touched, isSubmitting }) => (
+      {({ values, setFieldValue, errors, touched, isSubmitting, handleChange }) => (
         <Form>
           <Card className="mb-4">
-            <CardHeader>Dataset Information</CardHeader>
+            <CardHeader>데이터셋 정보</CardHeader>
             <CardBody>
               <FormGroup>
-                <Label for="name">Dataset Name</Label>
+                <Label for="name">이름</Label>
                 <Input
                   id="name"
                   name="name"
+                  value={values.name}
+                  onChange={handleChange}
                   invalid={touched.name && !!errors.name}
                 />
                 {touched.name && errors.name && (
-                  <Alert color="danger" className="mt-2">
-                    {errors.name}
-                  </Alert>
+                  <Alert color="danger" className="mt-2">{errors.name}</Alert>
                 )}
               </FormGroup>
 
               <FormGroup>
-                <Label for="description">Description</Label>
+                <Label for="description">설명</Label>
                 <Input
                   type="textarea"
                   id="description"
                   name="description"
+                  value={values.description || ''}
+                  onChange={handleChange}
                 />
               </FormGroup>
             </CardBody>
           </Card>
 
           <Card>
-            <CardHeader>Field Values</CardHeader>
+            <CardHeader>필드 값</CardHeader>
             <CardBody>
               {template.fields.map(field => (
                 <FormGroup key={field.name}>
@@ -187,8 +129,14 @@ export const DatasetForm: React.FC<DatasetFormProps> = ({
                     type={field.type}
                     name={`data.${field.name}`}
                     field={field}
-                    placeholder={field.placeholder}
+                    value={values.data[field.name]}
+                    onChange={(value) => setFieldValue(`data.${field.name}`, value)}
                   />
+                  {touched.data?.[field.name] && errors.data?.[field.name] && (
+                    <Alert color="danger" className="mt-2">
+                      {errors.data[field.name] as string}
+                    </Alert>
+                  )}
                 </FormGroup>
               ))}
             </CardBody>
@@ -196,7 +144,7 @@ export const DatasetForm: React.FC<DatasetFormProps> = ({
 
           <div className="d-flex justify-content-end mt-4">
             <Button type="submit" color="primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Dataset'}
+              {isSubmitting ? '저장 중...' : '데이터셋 저장'}
             </Button>
           </div>
         </Form>

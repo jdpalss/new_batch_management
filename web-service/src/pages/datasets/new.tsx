@@ -1,15 +1,17 @@
-import React from 'react';
+import type { NextPage } from 'next';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Card, CardBody } from 'reactstrap';
+import { Card, CardBody, Container } from 'reactstrap';
+import axios from 'axios';
 import { Template } from '../../types/template';
+import { Dataset } from '../../types/dataset';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { EmptyState } from '../../components/common/EmptyState';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DatasetForm } from '../../components/datasets/DatasetForm';
 import { useToasts } from '../../hooks/useToasts';
 
-const CreateDatasetPage: React.FC = () => {
+const CreateDatasetPage: NextPage = () => {
   const router = useRouter();
   const { templateId } = router.query;
   const { success, error } = useToasts();
@@ -17,11 +19,8 @@ const CreateDatasetPage: React.FC = () => {
   const { data: template, isLoading: isLoadingTemplate } = useQuery<Template>({
     queryKey: ['template', templateId],
     queryFn: async () => {
-      const response = await fetch(\`/api/template/\${templateId}\`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch template');
-      }
-      return response.json();
+      const { data } = await axios.get(`/api/template/${templateId}`);
+      return data;
     },
     enabled: !!templateId
   });
@@ -29,26 +28,16 @@ const CreateDatasetPage: React.FC = () => {
   const { data: templates, isLoading: isLoadingTemplates } = useQuery<Template[]>({
     queryKey: ['templates'],
     queryFn: async () => {
-      const response = await fetch('/api/template');
-      if (!response.ok) {
-        throw new Error('Failed to fetch templates');
-      }
-      return response.json();
+      const { data } = await axios.get('/api/template');
+      return data;
     },
     enabled: !templateId
   });
 
   const createDataset = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch('/api/dataset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (!response.ok) {
-        throw new Error('Failed to create dataset');
-      }
-      return response.json();
+    mutationFn: async (newDataset: Partial<Dataset>) => {
+      const { data } = await axios.post('/api/dataset', newDataset);
+      return data;
     },
     onSuccess: () => {
       success('Dataset created successfully');
@@ -69,19 +58,21 @@ const CreateDatasetPage: React.FC = () => {
 
   if (!templateId && templates?.length === 0) {
     return (
-      <EmptyState
-        title="No Templates Available"
-        description="Create a template first to define the structure of your dataset."
-        action={{
-          label: 'Create Template',
-          onClick: () => router.push('/templates/create')
-        }}
-      />
+      <Container className="py-4">
+        <EmptyState
+          title="No Templates Available"
+          description="Create a template first to define the structure of your dataset."
+          action={{
+            label: 'Create Template',
+            onClick: () => router.push('/templates/create')
+          }}
+        />
+      </Container>
     );
   }
 
   return (
-    <div className="container py-4">
+    <Container className="py-4">
       <PageHeader
         title="Create Dataset"
         description="Create a new dataset based on a template"
@@ -104,26 +95,25 @@ const CreateDatasetPage: React.FC = () => {
               <Card 
                 className="h-100 cursor-pointer"
                 onClick={() =>
-                  router.push(\`/datasets/new?templateId=\${template.id}\`)
+                  router.push(`/datasets/new?templateId=${template.id}`)
                 }
+                style={{ cursor: 'pointer' }}
               >
                 <CardBody>
-                  <h5 className="card-title">{template.name}</h5>
-                  <p className="card-text text-muted">
+                  <h5 className="mb-2">{template.name}</h5>
+                  <p className="text-muted mb-3">
                     {template.description}
                   </p>
-                  <div className="mt-3">
-                    <small className="text-muted">
-                      {template.fields.length} fields
-                    </small>
-                  </div>
+                  <small className="text-muted">
+                    {template.fields.length} fields
+                  </small>
                 </CardBody>
               </Card>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </Container>
   );
 };
 

@@ -1,43 +1,48 @@
-import React, { useState } from 'react';
-import { Formik, Form } from 'formik';
+import React from 'react';
+import { Formik, Form, FormikProps } from 'formik';
 import {
+  Button,
   Card,
   CardBody,
-  CardHeader,
-  Button,
   FormGroup,
   Label,
-  Input,
-  Row,
-  Col
+  Input
 } from 'reactstrap';
 import * as Yup from 'yup';
-import { BatchConfig } from '../../types/batch';
 import { Template } from '../../types/template';
 import { Dataset } from '../../types/dataset';
-import { ScriptTestDialog } from './ScriptTestDialog';
 
 interface BatchFormProps {
   templates: Template[];
   datasets: Dataset[];
-  initialValues?: Partial<BatchConfig>;
-  onSubmit: (values: Partial<BatchConfig>) => Promise<void>;
+  initialValues?: any;
+  onSubmit: (values: any) => Promise<void>;
+}
+
+interface BatchFormValues {
+  title: string;
+  description?: string;
+  templateId: string;
+  datasetId: string;
+  isActive: boolean;
+  scheduleType: 'periodic' | 'specific';
+  cronExpression?: string;
+  executionDates?: string[];
+  randomDelay: boolean;
 }
 
 const validationSchema = Yup.object().shape({
-  title: Yup.string().required('Title is required'),
-  templateId: Yup.string().required('Template is required'),
-  datasetId: Yup.string().required('Dataset is required'),
-  schedule: Yup.object().shape({
-    type: Yup.string().oneOf(['periodic', 'specific']).required(),
-    cronExpression: Yup.string().when('type', {
-      is: 'periodic',
-      then: Yup.string().required('Cron expression is required')
-    }),
-    executionDates: Yup.array().when('type', {
-      is: 'specific',
-      then: Yup.array().min(1, 'At least one execution date is required')
-    })
+  title: Yup.string().required('배치명을 입력해주세요'),
+  templateId: Yup.string().required('템플릿을 선택해주세요'),
+  datasetId: Yup.string().required('데이터셋을 선택해주세요'),
+  scheduleType: Yup.string().oneOf(['periodic', 'specific']).required(),
+  cronExpression: Yup.string().when('scheduleType', {
+    is: 'periodic',
+    then: Yup.string().required('Cron 표현식을 입력해주세요')
+  }),
+  executionDates: Yup.array().when('scheduleType', {
+    is: 'specific',
+    then: Yup.array().min(1, '최소 하나의 실행 일시를 선택해주세요')
   })
 });
 
@@ -47,30 +52,18 @@ export const BatchForm: React.FC<BatchFormProps> = ({
   initialValues,
   onSubmit
 }) => {
-  const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
-    initialValues?.templateId
-      ? templates.find(t => t.id === initialValues.templateId) || null
-      : null
-  );
-
-  const defaultValues: Partial<BatchConfig> = {
+  const defaultValues: BatchFormValues = {
     title: '',
     description: '',
     templateId: '',
     datasetId: '',
     isActive: true,
-    schedule: {
-      type: 'periodic',
-      cronExpression: '0 0 * * *', // Daily at midnight
-      randomDelay: 0
-    },
+    scheduleType: 'periodic',
+    cronExpression: '0 0 * * *',
+    executionDates: [],
+    randomDelay: false,
     ...initialValues
   };
-
-  const filteredDatasets = datasets.filter(
-    d => d.templateId === selectedTemplate?.id
-  );
 
   return (
     <Formik
@@ -78,218 +71,154 @@ export const BatchForm: React.FC<BatchFormProps> = ({
       validationSchema={validationSchema}
       onSubmit={onSubmit}
     >
-      {({ values, setFieldValue, errors, touched, isSubmitting }) => (
+      {({ values, errors, touched, handleChange, setFieldValue }: FormikProps<BatchFormValues>) => (
         <Form>
-          <Row>
-            <Col md={8}>
-              <Card className="mb-4">
-                <CardHeader>Basic Information</CardHeader>
-                <CardBody>
-                  <FormGroup>
-                    <Label for="title">Title</Label>
-                    <Input
-                      id="title"
-                      name="title"
-                      value={values.title}
-                      onChange={(e) => setFieldValue('title', e.target.value)}
-                      invalid={touched.title && !!errors.title}
-                    />
-                  </FormGroup>
+          <Card className="mb-4">
+            <CardBody>
+              <FormGroup>
+                <Label for="title">배치명</Label>
+                <Input
+                  id="title"
+                  name="title"
+                  value={values.title}
+                  onChange={handleChange}
+                  invalid={touched.title && !!errors.title}
+                />
+              </FormGroup>
 
-                  <FormGroup>
-                    <Label for="description">Description</Label>
-                    <Input
-                      type="textarea"
-                      id="description"
-                      name="description"
-                      value={values.description}
-                      onChange={(e) => setFieldValue('description', e.target.value)}
-                    />
-                  </FormGroup>
-                </CardBody>
-              </Card>
+              <FormGroup>
+                <Label for="description">설명</Label>
+                <Input
+                  type="textarea"
+                  id="description"
+                  name="description"
+                  value={values.description}
+                  onChange={handleChange}
+                />
+              </FormGroup>
 
-              <Card className="mb-4">
-                <CardHeader>Template & Dataset</CardHeader>
-                <CardBody>
-                  <FormGroup>
-                    <Label for="templateId">Template</Label>
-                    <Input
-                      type="select"
-                      id="templateId"
-                      name="templateId"
-                      value={values.templateId}
-                      onChange={(e) => {
-                        const template = templates.find(
-                          t => t.id === e.target.value
-                        );
-                        setSelectedTemplate(template || null);
-                        setFieldValue('templateId', e.target.value);
-                        setFieldValue('datasetId', '');
-                      }}
-                      invalid={touched.templateId && !!errors.templateId}
-                    >
-                      <option value="">Select template...</option>
-                      {templates.map(template => (
-                        <option key={template.id} value={template.id}>
-                          {template.name}
-                        </option>
-                      ))}
-                    </Input>
-                  </FormGroup>
+              <FormGroup>
+                <Label for="templateId">템플릿</Label>
+                <Input
+                  type="select"
+                  id="templateId"
+                  name="templateId"
+                  value={values.templateId}
+                  onChange={(e) => {
+                    setFieldValue('templateId', e.target.value);
+                    setFieldValue('datasetId', '');
+                  }}
+                  invalid={touched.templateId && !!errors.templateId}
+                >
+                  <option value="">템플릿을 선택하세요</option>
+                  {templates.map(template => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </Input>
+              </FormGroup>
 
-                  <FormGroup>
-                    <Label for="datasetId">Dataset</Label>
-                    <Input
-                      type="select"
-                      id="datasetId"
-                      name="datasetId"
-                      value={values.datasetId}
-                      onChange={(e) => setFieldValue('datasetId', e.target.value)}
-                      invalid={touched.datasetId && !!errors.datasetId}
-                      disabled={!selectedTemplate}
-                    >
-                      <option value="">
-                        {selectedTemplate
-                          ? 'Select dataset...'
-                          : 'Select template first'}
+              <FormGroup>
+                <Label for="datasetId">데이터셋</Label>
+                <Input
+                  type="select"
+                  id="datasetId"
+                  name="datasetId"
+                  value={values.datasetId}
+                  onChange={handleChange}
+                  invalid={touched.datasetId && !!errors.datasetId}
+                  disabled={!values.templateId}
+                >
+                  <option value="">
+                    {values.templateId
+                      ? '데이터셋을 선택하세요'
+                      : '템플릿을 먼저 선택하세요'}
+                  </option>
+                  {datasets
+                    .filter(d => d.templateId === values.templateId)
+                    .map(dataset => (
+                      <option key={dataset.id} value={dataset.id}>
+                        {dataset.name || 'Unnamed Dataset'}
                       </option>
-                      {filteredDatasets.map(dataset => (
-                        <option key={dataset.id} value={dataset.id}>
-                          {dataset.name || 'Unnamed Dataset'}
-                        </option>
-                      ))}
-                    </Input>
-                  </FormGroup>
+                    ))}
+                </Input>
+              </FormGroup>
 
-                  {selectedTemplate && values.datasetId && (
-                    <Button
-                      color="secondary"
-                      outline
-                      onClick={() => setIsTestDialogOpen(true)}
-                    >
-                      Test Script
-                    </Button>
-                  )}
-                </CardBody>
-              </Card>
+              <FormGroup>
+                <Label for="scheduleType">스케줄 유형</Label>
+                <Input
+                  type="select"
+                  id="scheduleType"
+                  name="scheduleType"
+                  value={values.scheduleType}
+                  onChange={handleChange}
+                >
+                  <option value="periodic">주기적</option>
+                  <option value="specific">특정 일시</option>
+                </Input>
+              </FormGroup>
 
-              <Card>
-                <CardHeader>Schedule Configuration</CardHeader>
-                <CardBody>
-                  <FormGroup>
-                    <Label for="scheduleType">Schedule Type</Label>
-                    <Input
-                      type="select"
-                      id="scheduleType"
-                      name="schedule.type"
-                      value={values.schedule?.type}
-                      onChange={(e) =>
-                        setFieldValue('schedule.type', e.target.value)
-                      }
-                    >
-                      <option value="periodic">Periodic</option>
-                      <option value="specific">Specific Dates</option>
-                    </Input>
-                  </FormGroup>
+              {values.scheduleType === 'periodic' && (
+                <FormGroup>
+                  <Label for="cronExpression">Cron 표현식</Label>
+                  <Input
+                    id="cronExpression"
+                    name="cronExpression"
+                    value={values.cronExpression}
+                    onChange={handleChange}
+                    placeholder="예: 0 0 * * * (매일 자정)"
+                    invalid={touched.cronExpression && !!errors.cronExpression}
+                  />
+                </FormGroup>
+              )}
 
-                  {values.schedule?.type === 'periodic' && (
-                    <FormGroup>
-                      <Label for="cronExpression">Cron Expression</Label>
-                      <Input
-                        id="cronExpression"
-                        name="schedule.cronExpression"
-                        value={values.schedule.cronExpression}
-                        onChange={(e) =>
-                          setFieldValue('schedule.cronExpression', e.target.value)
-                        }
-                        invalid={
-                          touched.schedule?.cronExpression &&
-                          !!errors.schedule?.cronExpression
-                        }
-                      />
-                      <small className="form-text text-muted">
-                        Use cron expression format (e.g., "0 0 * * *" for daily at
-                        midnight)
-                      </small>
-                    </FormGroup>
-                  )}
+              {values.scheduleType === 'specific' && (
+                <FormGroup>
+                  <Label for="executionDates">실행 일시</Label>
+                  <Input
+                    type="datetime-local"
+                    multiple
+                    id="executionDates"
+                    name="executionDates"
+                    value={values.executionDates}
+                    onChange={handleChange}
+                    invalid={touched.executionDates && !!errors.executionDates}
+                  />
+                </FormGroup>
+              )}
 
-                  {values.schedule?.type === 'specific' && (
-                    <FormGroup>
-                      <Label for="executionDates">Execution Dates</Label>
-                      <Input
-                        type="datetime-local"
-                        multiple
-                        id="executionDates"
-                        name="schedule.executionDates"
-                        value={values.schedule.executionDates}
-                        onChange={(e) => {
-                          const dates = Array.from(e.target.selectedOptions).map(
-                            option => new Date(option.value)
-                          );
-                          setFieldValue('schedule.executionDates', dates);
-                        }}
-                        invalid={
-                          touched.schedule?.executionDates &&
-                          !!errors.schedule?.executionDates
-                        }
-                      />
-                    </FormGroup>
-                  )}
+              <FormGroup check>
+                <Label check>
+                  <Input
+                    type="checkbox"
+                    name="randomDelay"
+                    checked={values.randomDelay}
+                    onChange={handleChange}
+                  />{' '}
+                  실행 시 무작위 지연 추가
+                </Label>
+              </FormGroup>
 
-                  <FormGroup>
-                    <Label for="randomDelay">Random Delay</Label>
-                    <Input
-                      type="number"
-                      id="randomDelay"
-                      name="schedule.randomDelay"
-                      value={values.schedule?.randomDelay}
-                      onChange={(e) =>
-                        setFieldValue('schedule.randomDelay', Number(e.target.value))
-                      }
-                    />
-                    <small className="form-text text-muted">
-                      Add random delay (in milliseconds) to execution time
-                    </small>
-                  </FormGroup>
+              <FormGroup check>
+                <Label check>
+                  <Input
+                    type="checkbox"
+                    name="isActive"
+                    checked={values.isActive}
+                    onChange={handleChange}
+                  />{' '}
+                  활성화
+                </Label>
+              </FormGroup>
+            </CardBody>
+          </Card>
 
-                  <FormGroup check>
-                    <Label check>
-                      <Input
-                        type="checkbox"
-                        name="isActive"
-                        checked={values.isActive}
-                        onChange={(e) =>
-                          setFieldValue('isActive', e.target.checked)
-                        }
-                      />{' '}
-                      Active
-                    </Label>
-                  </FormGroup>
-                </CardBody>
-              </Card>
-            </Col>
-          </Row>
-
-          <div className="d-flex justify-content-end mt-4">
-            <Button 
-              type="submit" 
-              color="primary" 
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Saving...' : 'Save Batch'}
+          <div className="d-flex justify-content-end">
+            <Button type="submit" color="primary">
+              배치 저장
             </Button>
           </div>
-
-          {selectedTemplate && values.datasetId && (
-            <ScriptTestDialog
-              isOpen={isTestDialogOpen}
-              onClose={() => setIsTestDialogOpen(false)}
-              template={selectedTemplate}
-              datasetId={values.datasetId}
-            />
-          )}
         </Form>
       )}
     </Formik>

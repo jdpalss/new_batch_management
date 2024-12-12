@@ -1,6 +1,7 @@
-import React from 'react';
+import type { NextPage } from 'next';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import {
   Button,
   Card,
@@ -10,24 +11,22 @@ import {
   UncontrolledDropdown,
   DropdownToggle,
   DropdownMenu,
-  DropdownItem
+  DropdownItem,
+  Container,
 } from 'reactstrap';
 import { Dataset } from '../../types/dataset';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { PageHeader } from '../../components/common/PageHeader';
 import { formatDateTime } from '../../utils/dateUtils';
 
-const DatasetsPage: React.FC = () => {
+const DatasetsPage: NextPage = () => {
   const router = useRouter();
 
   const { data: datasets, isLoading } = useQuery<Dataset[]>({
     queryKey: ['datasets'],
     queryFn: async () => {
-      const response = await fetch('/api/dataset');
-      if (!response.ok) {
-        throw new Error('Failed to fetch datasets');
-      }
-      return response.json();
+      const { data } = await axios.get('/api/dataset');
+      return data;
     }
   });
 
@@ -36,7 +35,7 @@ const DatasetsPage: React.FC = () => {
   }
 
   return (
-    <div className="container py-4">
+    <Container className="py-4">
       <PageHeader
         title="Datasets"
         action={
@@ -82,14 +81,14 @@ const DatasetsPage: React.FC = () => {
                       <DropdownMenu>
                         <DropdownItem
                           onClick={() => 
-                            router.push(\`/datasets/edit/\${dataset.id}\`)
+                            router.push(`/datasets/edit/${dataset.id}`)
                           }
                         >
                           Edit
                         </DropdownItem>
                         <DropdownItem
                           onClick={() => 
-                            router.push(\`/batch/new?datasetId=\${dataset.id}\`)
+                            router.push(`/batch/new?datasetId=${dataset.id}`)
                           }
                         >
                           Create Batch
@@ -108,7 +107,7 @@ const DatasetsPage: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {!datasets?.length && (
+              {(!datasets || datasets.length === 0) && (
                 <tr>
                   <td colSpan={6} className="text-center py-4">
                     No datasets found. Create your first dataset to get started.
@@ -119,7 +118,7 @@ const DatasetsPage: React.FC = () => {
           </Table>
         </CardBody>
       </Card>
-    </div>
+    </Container>
   );
 };
 

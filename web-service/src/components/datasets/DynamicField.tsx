@@ -1,201 +1,199 @@
 import React from 'react';
-import { useField } from 'formik';
-import { Input, FormFeedback, Label } from 'reactstrap';
-import { FieldType, FieldOption, FieldValidation } from '../../types/template';
+import { Input, FormGroup, Label } from 'reactstrap';
+import { TemplateField } from '../../types/template';
+import { FIELD_TYPES } from '../../constants';
 import MonacoEditor from '@monaco-editor/react';
 
 interface DynamicFieldProps {
-  type: FieldType;
+  type: string;
   name: string;
-  label: string;
-  required?: boolean;
-  options?: FieldOption[];
-  validation?: FieldValidation;
-  placeholder?: string;
+  field: TemplateField;
+  value: any;
+  onChange: (value: any) => void;
 }
 
 export const DynamicField: React.FC<DynamicFieldProps> = ({
   type,
   name,
-  label,
-  required,
-  options,
-  validation,
-  placeholder
+  field,
+  value,
+  onChange
 }) => {
-  const [field, meta, helpers] = useField(name);
-
-  const renderField = () => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     switch (type) {
-      case 'text':
-      case 'email':
-      case 'number':
-        return (
-          <Input
-            type={type}
-            {...field}
-            placeholder={placeholder}
-            invalid={meta.touched && !!meta.error}
-          />
-        );
-
-      case 'textarea':
-        return (
-          <Input
-            type="textarea"
-            {...field}
-            placeholder={placeholder}
-            invalid={meta.touched && !!meta.error}
-          />
-        );
-
-      case 'checkbox':
-        return options ? (
-          <div>
-            {options.map(option => (
-              <div key={option.value} className="form-check">
-                <Input
-                  type="checkbox"
-                  id={`${name}-${option.value}`}
-                  checked={field.value?.includes(option.value)}
-                  onChange={() => {
-                    const values = field.value || [];
-                    if (values.includes(option.value)) {
-                      helpers.setValue(
-                        values.filter((v: string) => v !== option.value)
-                      );
-                    } else {
-                      helpers.setValue([...values, option.value]);
-                    }
-                  }}
-                />
-                <Label check for={`${name}-${option.value}`}>
-                  {option.label}
-                </Label>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <Input
-            type="checkbox"
-            {...field}
-            invalid={meta.touched && !!meta.error}
-          />
-        );
-
-      case 'radio':
-        return options ? (
-          <div>
-            {options.map(option => (
-              <div key={option.value} className="form-check">
-                <Input
-                  type="radio"
-                  id={`${name}-${option.value}`}
-                  {...field}
-                  value={option.value}
-                  invalid={meta.touched && !!meta.error}
-                />
-                <Label check for={`${name}-${option.value}`}>
-                  {option.label}
-                </Label>
-              </div>
-            ))}
-          </div>
-        ) : null;
-
-      case 'combo':
-        return (
-          <Input
-            type="select"
-            {...field}
-            invalid={meta.touched && !!meta.error}
-          >
-            <option value="">Select...</option>
-            {options?.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Input>
-        );
-
-      case 'file':
-        return (
-          <div>
-            <Input
-              type="file"
-              onChange={async (event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    helpers.setValue(reader.result);
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
-              invalid={meta.touched && !!meta.error}
-            />
-            {field.value && (
-              <div className="mt-2">
-                {field.value.startsWith('data:image') ? (
-                  <img
-                    src={field.value}
-                    alt="Preview"
-                    style={{ maxWidth: '200px' }}
-                  />
-                ) : (
-                  <div>File uploaded</div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-
-      case 'date':
-      case 'datetime':
-        return (
-          <Input
-            type={type === 'date' ? 'date' : 'datetime-local'}
-            {...field}
-            invalid={meta.touched && !!meta.error}
-          />
-        );
-
-      case 'json':
-      case 'code':
-        return (
-          <div style={{ border: '1px solid #ced4da', borderRadius: '0.25rem' }}>
-            <MonacoEditor
-              height="200px"
-              language={type === 'json' ? 'json' : 'typescript'}
-              value={field.value || ''}
-              onChange={(value) => helpers.setValue(value)}
-              options={{
-                minimap: { enabled: false },
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                wordWrap: 'on'
-              }}
-            />
-          </div>
-        );
-
+      case FIELD_TYPES.NUMBER:
+        onChange(e.target.value ? Number(e.target.value) : null);
+        break;
+      case FIELD_TYPES.CHECKBOX:
+        onChange(e.target.checked);
+        break;
       default:
-        return null;
+        onChange(e.target.value);
     }
   };
 
-  return (
-    <div>
-      <Label for={name}>
-        {label}
-        {required && <span className="text-danger">*</span>}
-      </Label>
-      {renderField()}
-      {meta.touched && meta.error && (
-        <FormFeedback valid={false}>{meta.error}</FormFeedback>
-      )}
-    </div>
-  );
+  switch (type) {
+    case FIELD_TYPES.TEXT:
+    case FIELD_TYPES.EMAIL:
+    case FIELD_TYPES.NUMBER:
+      return (
+        <Input
+          type={type}
+          name={name}
+          value={value || ''}
+          onChange={handleChange}
+          placeholder={field.placeholder}
+        />
+      );
+
+    case FIELD_TYPES.TEXTAREA:
+      return (
+        <Input
+          type="textarea"
+          name={name}
+          value={value || ''}
+          onChange={handleChange}
+          placeholder={field.placeholder}
+        />
+      );
+
+    case FIELD_TYPES.CHECKBOX:
+      return field.options ? (
+        <div>
+          {field.options.map(option => (
+            <FormGroup check key={option.value}>
+              <Label check>
+                <Input
+                  type="checkbox"
+                  name={name}
+                  value={option.value}
+                  checked={Array.isArray(value) ? value.includes(option.value) : false}
+                  onChange={(e) => {
+                    const currentValues = Array.isArray(value) ? value : [];
+                    if (e.target.checked) {
+                      onChange([...currentValues, option.value]);
+                    } else {
+                      onChange(currentValues.filter(v => v !== option.value));
+                    }
+                  }}
+                />{' '}
+                {option.label}
+              </Label>
+            </FormGroup>
+          ))}
+        </div>
+      ) : (
+        <Input
+          type="checkbox"
+          name={name}
+          checked={value || false}
+          onChange={handleChange}
+        />
+      );
+
+    case FIELD_TYPES.RADIO:
+      return (
+        <div>
+          {field.options?.map(option => (
+            <FormGroup check key={option.value}>
+              <Label check>
+                <Input
+                  type="radio"
+                  name={name}
+                  value={option.value}
+                  checked={value === option.value}
+                  onChange={handleChange}
+                />{' '}
+                {option.label}
+              </Label>
+            </FormGroup>
+          ))}
+        </div>
+      );
+
+    case FIELD_TYPES.COMBO:
+      return (
+        <Input
+          type="select"
+          name={name}
+          value={value || ''}
+          onChange={handleChange}
+        >
+          <option value="">선택하세요</option>
+          {field.options?.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Input>
+      );
+
+    case FIELD_TYPES.FILE:
+      return (
+        <div>
+          <Input
+            type="file"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  onChange(reader.result);
+                };
+                reader.readAsDataURL(file);
+              }
+            }}
+          />
+          {value && (
+            <div className="mt-2">
+              {value.startsWith('data:image') ? (
+                <img src={value} alt="Preview" style={{ maxWidth: '200px' }} />
+              ) : (
+                <div>파일이 업로드됨</div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+
+    case FIELD_TYPES.DATE:
+      return (
+        <Input
+          type="date"
+          name={name}
+          value={value || ''}
+          onChange={handleChange}
+        />
+      );
+
+    case FIELD_TYPES.DATETIME:
+      return (
+        <Input
+          type="datetime-local"
+          name={name}
+          value={value || ''}
+          onChange={handleChange}
+        />
+      );
+
+    case FIELD_TYPES.JSON:
+    case FIELD_TYPES.CODE:
+      return (
+        <MonacoEditor
+          height="200px"
+          language={type === FIELD_TYPES.JSON ? 'json' : 'typescript'}
+          value={value || ''}
+          onChange={value => onChange(value)}
+          options={{
+            minimap: { enabled: false },
+            lineNumbers: 'on',
+            scrollBeyondLastLine: false,
+            wordWrap: 'on'
+          }}
+        />
+      );
+
+    default:
+      return null;
+  }
 };
