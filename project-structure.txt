@@ -1,0 +1,115 @@
+.
+├── README.md
+├── batch-service
+│   ├── package.json
+│   ├── src
+│   │   ├── batch
+│   │   │   ├── BatchExecutor.ts
+│   │   │   └── BatchScheduler.ts
+│   │   ├── config.ts
+│   │   ├── index.ts
+│   │   ├── models
+│   │   │   └── batch.ts
+│   │   └── utils
+│   │       └── logger.ts
+│   └── tsconfig.json
+├── data
+├── package.json
+├── project-structure.txt
+├── tsconfig.json
+├── web-service
+│   ├── data
+│   │   ├── batches.db
+│   │   ├── datasets.db
+│   │   └── templates.db
+│   ├── next-env.d.ts
+│   ├── next.config.js
+│   ├── package.json
+│   ├── src
+│   │   ├── components
+│   │   │   ├── batch
+│   │   │   │   ├── BatchDetails.tsx
+│   │   │   │   ├── BatchForm.tsx
+│   │   │   │   ├── BatchHistory.tsx
+│   │   │   │   ├── BatchList.tsx
+│   │   │   │   ├── BatchLogs.tsx
+│   │   │   │   ├── BatchResultModal.tsx
+│   │   │   │   ├── BatchScriptEditor.tsx
+│   │   │   │   ├── BatchStats.tsx
+│   │   │   │   └── ScriptTestDialog.tsx
+│   │   │   ├── common
+│   │   │   │   ├── ConfirmDialog.tsx
+│   │   │   │   ├── EmptyState.tsx
+│   │   │   │   ├── LoadingSpinner.tsx
+│   │   │   │   ├── PageHeader.tsx
+│   │   │   │   ├── Select.tsx
+│   │   │   │   ├── Toasts.tsx
+│   │   │   │   └── index.ts
+│   │   │   ├── datasets
+│   │   │   │   ├── DatasetForm.tsx
+│   │   │   │   ├── DatasetGridView.tsx
+│   │   │   │   ├── DatasetList.tsx
+│   │   │   │   └── DynamicField.tsx
+│   │   │   ├── layout
+│   │   │   │   ├── Layout.tsx
+│   │   │   │   └── Navigation.tsx
+│   │   │   └── templates
+│   │   │       ├── MonacoEditorTypes.ts
+│   │   │       ├── ScriptEditor.tsx
+│   │   │       ├── TemplateField.tsx
+│   │   │       ├── TemplateForm.tsx
+│   │   │       └── TemplateList.tsx
+│   │   ├── constants
+│   │   │   └── fieldTypes.ts
+│   │   ├── hooks
+│   │   │   └── useToasts.ts
+│   │   ├── pages
+│   │   │   ├── _app.tsx
+│   │   │   ├── api
+│   │   │   │   └── batch
+│   │   │   │       └── test.ts
+│   │   │   ├── batch
+│   │   │   │   ├── [id].tsx
+│   │   │   │   └── index.tsx
+│   │   │   ├── dashboard
+│   │   │   │   └── index.tsx
+│   │   │   ├── datasets
+│   │   │   │   ├── index.tsx
+│   │   │   │   ├── new
+│   │   │   │   │   ├── create.tsx
+│   │   │   │   │   └── select-template.tsx
+│   │   │   │   ├── new.tsx
+│   │   │   │   └── select-template.tsx
+│   │   │   ├── index.tsx
+│   │   │   └── templates
+│   │   │       ├── create.tsx
+│   │   │       ├── edit
+│   │   │       │   └── [id].tsx
+│   │   │       └── index.tsx
+│   │   ├── services
+│   │   │   ├── batchExecutionService.ts
+│   │   │   ├── batchService.ts
+│   │   │   ├── config.ts
+│   │   │   ├── datasetService.ts
+│   │   │   └── templateService.ts
+│   │   ├── store
+│   │   ├── styles
+│   │   │   └── globals.css
+│   │   ├── types
+│   │   │   ├── batch.ts
+│   │   │   ├── dataset.ts
+│   │   │   ├── script.ts
+│   │   │   └── template.ts
+│   │   └── utils
+│   │       ├── cronUtils.ts
+│   │       ├── date.ts
+│   │       ├── fieldValidation.ts
+│   │       ├── format.ts
+│   │       ├── scriptUtils.ts
+│   │       ├── scriptValidator.ts
+│   │       ├── validation.ts
+│   │       └── validationSchemas.ts
+│   └── tsconfig.json
+└── yarn.lock
+
+32 directories, 81 files

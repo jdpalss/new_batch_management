@@ -1,0 +1,20 @@
+{
+  "name": "batch-automation",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "web-service",
+    "batch-service"
+  ],
+  "scripts": {
+    "dev:web": "yarn workspace web-service dev",
+    "dev:batch": "yarn workspace batch-service dev",
+    "build:web": "yarn workspace web-service build",
+    "build:batch": "yarn workspace batch-service build",
+    "start:web": "yarn workspace web-service start",
+    "start:batch": "yarn workspace batch-service start"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
