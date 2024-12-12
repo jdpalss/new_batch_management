@@ -1,7 +1,6 @@
 import React from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
 import {
   Button,
   Card,
@@ -18,14 +17,17 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { PageHeader } from '../../components/common/PageHeader';
 import { formatDateTime } from '../../utils/dateUtils';
 
-export default function DatasetsPage() {
+const DatasetsPage: React.FC = () => {
   const router = useRouter();
 
   const { data: datasets, isLoading } = useQuery<Dataset[]>({
     queryKey: ['datasets'],
     queryFn: async () => {
-      const response = await axios.get('/api/dataset');
-      return response.data;
+      const response = await fetch('/api/dataset');
+      if (!response.ok) {
+        throw new Error('Failed to fetch datasets');
+      }
+      return response.json();
     }
   });
 
@@ -34,7 +36,7 @@ export default function DatasetsPage() {
   }
 
   return (
-    <div>
+    <div className="container py-4">
       <PageHeader
         title="Datasets"
         action={
@@ -119,4 +121,6 @@ export default function DatasetsPage() {
       </Card>
     </div>
   );
-}
+};
+
+export default DatasetsPage;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import { Card, CardBody, CardHeader, Button, ButtonGroup } from 'reactstrap';
 import { useToasts } from '../../hooks/useToasts';
@@ -10,29 +10,32 @@ interface ScriptEditorProps {
   height?: string | number;
 }
 
-const defaultScript = `async function runScript(context) {
+const scriptTemplates = {
+  basic: `async function runScript(context) {
   const { page, data, log } = context;
   
   try {
+    // Log start of execution
     log('Starting script execution');
 
     // Navigate to target website
     await page.goto('https://example.com');
     await page.waitForLoadState('networkidle');
 
-    // Fill form using dataset values
-    // await page.fill('#username', data.username);
-    // await page.click('button[type="submit"]');
+    // Example: Working with dynamic data
+    const username = data.username;
+    log('Using username:', username);
 
-    log('Script execution completed successfully');
+    await page.fill('#username', username);
+    await page.click('button[type="submit"]');
+
+    log('Script execution completed');
   } catch (error) {
     context.error('Script execution failed', error);
     throw error;
   }
-}`;
+}`,
 
-const scriptTemplates = {
-  basic: defaultScript,
   form: `async function runScript(context) {
   const { page, data, log } = context;
   
@@ -42,9 +45,9 @@ const scriptTemplates = {
     await page.goto('https://example.com/form');
     await page.waitForLoadState('networkidle');
 
-    // Fill form fields
+    // Fill form using dataset values
     for (const [key, value] of Object.entries(data)) {
-      const field = await page.\$(\`[name="\${key}"]\`);
+      const field = await page.$(\`[name="\${key}"]\`);
       if (field) {
         await field.fill(String(value));
         log(\`Filled \${key} with \${value}\`);
@@ -61,6 +64,7 @@ const scriptTemplates = {
     throw error;
   }
 }`,
+
   login: `async function runScript(context) {
   const { page, data, log } = context;
   
@@ -70,25 +74,24 @@ const scriptTemplates = {
     await page.goto('https://example.com/login');
     await page.waitForLoadState('networkidle');
 
-    // Enter credentials
+    // Enter credentials from dataset
     await page.fill('input[name="username"]', data.username);
     await page.fill('input[name="password"]', data.password);
+    log('Filled login credentials');
     
-    // Submit login form
+    // Submit form
     await page.click('button[type="submit"]');
-    
-    // Wait for successful login
     await page.waitForNavigation();
     
     // Verify login
     const logoutButton = await page.$('button:has-text("Logout")');
     if (!logoutButton) {
-      throw new Error('Login failed - Logout button not found');
+      throw new Error('Login verification failed');
     }
 
     log('Login successful');
   } catch (error) {
-    context.error('Login automation failed', error);
+    context.error('Login failed', error);
     throw error;
   }
 }`
@@ -101,11 +104,11 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   height = '400px'
 }) => {
   const { error } = useToasts();
-  const [selectedTemplate, setSelectedTemplate] = useState<keyof typeof scriptTemplates>('basic');
+  const [selectedTemplate, setSelectedTemplate] = React.useState<keyof typeof scriptTemplates>('basic');
 
   useEffect(() => {
     if (!value) {
-      onChange(defaultScript);
+      onChange(scriptTemplates.basic);
     }
   }, [value, onChange]);
 
@@ -124,14 +127,14 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
         <span>Playwright Script</span>
         {!readOnly && (
           <ButtonGroup size="sm">
-            {Object.keys(scriptTemplates).map((template) => (
+            {Object.entries(scriptTemplates).map(([key, _]) => (
               <Button
-                key={template}
-                color={selectedTemplate === template ? 'primary' : 'secondary'}
+                key={key}
+                color={selectedTemplate === key ? 'primary' : 'secondary'}
                 outline
-                onClick={() => handleTemplateChange(template as keyof typeof scriptTemplates)}
+                onClick={() => handleTemplateChange(key as keyof typeof scriptTemplates)}
               >
-                {template.charAt(0).toUpperCase() + template.slice(1)}
+                {key.charAt(0).toUpperCase() + key.slice(1)}
               </Button>
             ))}
           </ButtonGroup>

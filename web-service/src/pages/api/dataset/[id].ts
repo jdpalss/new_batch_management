@@ -3,7 +3,7 @@ import { DatasetService } from '../../../services/datasetService';
 import { Logger } from '../../../utils/logger';
 
 const logger = new Logger();
-const datasetService = new DatasetService(process.env.DATABASE_PATH || './data', logger);
+const datasetService = new DatasetService(logger);
 
 export default async function handler(
   req: NextApiRequest,
@@ -22,6 +22,9 @@ export default async function handler(
         return res.status(200).json(dataset);
 
       case 'PUT':
+        if (!req.body.data) {
+          return res.status(400).json({ error: 'Dataset data is required' });
+        }
         const updatedDataset = await datasetService.updateDataset(id, req.body.data);
         return res.status(200).json(updatedDataset);
 
@@ -34,14 +37,14 @@ export default async function handler(
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
   } catch (error) {
-    logger.error(`API Error for dataset ${id}`, error);
+    logger.error(`Dataset API Error for ${id}:`, error);
     
     if (error instanceof Error && error.message.includes('not found')) {
       return res.status(404).json({ error: 'Dataset not found' });
     }
     
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Internal Server Error'
+    return res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Internal Server Error' 
     });
   }
 }
