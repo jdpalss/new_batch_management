@@ -1,75 +1,86 @@
 import React from 'react';
 import { useRouter } from 'next/router';
+import { Container } from 'reactstrap';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import axios from 'axios';
-import { Template } from '../../types/template';
-import { Dataset } from '../../types/dataset';
-import { BatchConfig } from '../../types/batch';
-import { PageHeader } from '../../components/common/PageHeader';
 import { BatchForm } from '../../components/batch/BatchForm';
+import { PageHeader } from '../../components/common/PageHeader';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useToasts } from '../../hooks/useToasts';
+import { TemplateService, DatasetService, BatchService } from '../../services/api';
 
-export default function CreateBatchPage() {
+export default function NewBatchPage() {
   const router = useRouter();
-  const { datasetId } = router.query;
-  const { addToast } = useToasts();
+  const toasts = useToasts();
 
-  const { data: templates, isLoading: isLoadingTemplates } = useQuery<Template[]>({
+  // 템플릿 목록 조회
+  const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['templates'],
-    queryFn: async () => {
-      const response = await axios.get('/api/template');
-      return response.data;
+    queryFn: TemplateService.list,
+    onError: (error: Error) => {
+      toasts.addToast({
+        type: 'error',
+        title: '템플릿 로딩 실패',
+        message: error.message
+      });
     }
   });
 
-  const { data: datasets, isLoading: isLoadingDatasets } = useQuery<Dataset[]>({
+  // 데이터셋 목록 조회
+  const { data: datasets = [], isLoading: datasetsLoading } = useQuery({
     queryKey: ['datasets'],
-    queryFn: async () => {
-      const response = await axios.get('/api/dataset');
-      return response.data;
+    queryFn: DatasetService.list,
+    onError: (error: Error) => {
+      toasts.addToast({
+        type: 'error',
+        title: '데이터셋 로딩 실패',
+        message: error.message
+      });
     }
   });
 
-  const createBatch = useMutation({
-    mutationFn: async (batch: Partial<BatchConfig>) => {
-      const response = await axios.post('/api/batch', batch);
-      return response.data;
-    },
+  // 배치 생성 mutation
+  const { mutateAsync: createBatch } = useMutation({
+    mutationFn: BatchService.create,
     onSuccess: () => {
-      addToast({
+      toasts.addToast({
         type: 'success',
-        message: 'Batch created successfully'
+        title: '배치 생성 성공',
+        message: '새로운 배치가 생성되었습니다.'
       });
       router.push('/batch');
     },
-    onError: (error) => {
-      addToast({
+    onError: (error: any) => {
+      const errorMessage = error.message || error.error || '배치 생성 중 오류가 발생했습니다.';
+      toasts.addToast({
         type: 'error',
-        message: error instanceof Error ? error.message : 'Failed to create batch'
+        title: '배치 생성 실패',
+        message: errorMessage
       });
+      throw error;
     }
   });
 
-  if (isLoadingTemplates || isLoadingDatasets) {
+  if (templatesLoading || datasetsLoading) {
     return <LoadingSpinner />;
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Create Batch"
-        description="Configure a new batch execution"
+    <Container>
+      <PageHeader 
+        title="새 배치 생성" 
+        subtitle="새로운 배치 작업을 생성합니다."
+        breadcrumbs={[
+          { text: '홈', href: '/' },
+          { text: '배치 관리', href: '/batch' },
+          { text: '새 배치 생성' }
+        ]}
       />
-
+      
       <BatchForm
-        templates={templates || []}
-        datasets={datasets || []}
-        initialValues={datasetId ? { datasetId } : undefined}
-        onSubmit={async (values) => {
-          await createBatch.mutateAsync(values);
-        }}
+        templates={templates}
+        datasets={datasets}
+        onSubmit={createBatch}
       />
-    </div>
+    </Container>
   );
 }

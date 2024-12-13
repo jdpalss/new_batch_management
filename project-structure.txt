@@ -10,10 +10,19 @@
 │   │   ├── index.ts
 │   │   ├── models
 │   │   │   └── batch.ts
+│   │   ├── services
+│   │   │   └── datasetService.ts
+│   │   ├── types
+│   │   │   └── batch.ts
 │   │   └── utils
 │   │       └── logger.ts
 │   └── tsconfig.json
 ├── data
+│   ├── batch-logs.db
+│   ├── batch-results.db
+│   ├── batches.db
+│   ├── datasets.db
+│   └── templates.db
 ├── package.json
 ├── project-structure.txt
 ├── tsconfig.json
@@ -40,6 +49,8 @@
 │   │   │   ├── common
 │   │   │   │   ├── ConfirmDialog.tsx
 │   │   │   │   ├── EmptyState.tsx
+│   │   │   │   ├── ErrorBoundary.tsx
+│   │   │   │   ├── GridView.tsx
 │   │   │   │   ├── LoadingSpinner.tsx
 │   │   │   │   ├── PageHeader.tsx
 │   │   │   │   ├── Select.tsx
@@ -54,26 +65,51 @@
 │   │   │   │   ├── Layout.tsx
 │   │   │   │   └── Navigation.tsx
 │   │   │   └── templates
+│   │   │       ├── FieldOptionsModal.tsx
 │   │   │       ├── MonacoEditorTypes.ts
 │   │   │       ├── ScriptEditor.tsx
 │   │   │       ├── TemplateField.tsx
 │   │   │       ├── TemplateForm.tsx
 │   │   │       └── TemplateList.tsx
 │   │   ├── constants
-│   │   │   └── fieldTypes.ts
+│   │   │   ├── fieldTypes.ts
+│   │   │   └── index.ts
 │   │   ├── hooks
+│   │   │   ├── useModal.ts
+│   │   │   ├── useMutation.ts
+│   │   │   ├── useQuery.ts
 │   │   │   └── useToasts.ts
+│   │   ├── lib
+│   │   │   ├── db.ts
+│   │   │   └── utils.ts
 │   │   ├── pages
 │   │   │   ├── _app.tsx
 │   │   │   ├── api
-│   │   │   │   └── batch
-│   │   │   │       └── test.ts
+│   │   │   │   ├── batch
+│   │   │   │   │   ├── [id]
+│   │   │   │   │   │   └── execute.ts
+│   │   │   │   │   ├── [id].ts
+│   │   │   │   │   ├── index.ts
+│   │   │   │   │   └── test.ts
+│   │   │   │   ├── dashboard
+│   │   │   │   │   └── stats.ts
+│   │   │   │   ├── dataset
+│   │   │   │   │   ├── [id].ts
+│   │   │   │   │   └── index.ts
+│   │   │   │   └── template
+│   │   │   │       ├── [id].ts
+│   │   │   │       └── index.ts
 │   │   │   ├── batch
 │   │   │   │   ├── [id].tsx
-│   │   │   │   └── index.tsx
+│   │   │   │   ├── edit
+│   │   │   │   │   └── [id].tsx
+│   │   │   │   ├── index.tsx
+│   │   │   │   └── new.tsx
 │   │   │   ├── dashboard
 │   │   │   │   └── index.tsx
 │   │   │   ├── datasets
+│   │   │   │   ├── edit
+│   │   │   │   │   └── [id].tsx
 │   │   │   │   ├── index.tsx
 │   │   │   │   ├── new
 │   │   │   │   │   ├── create.tsx
@@ -87,24 +123,31 @@
 │   │   │       │   └── [id].tsx
 │   │   │       └── index.tsx
 │   │   ├── services
+│   │   │   ├── api.ts
 │   │   │   ├── batchExecutionService.ts
 │   │   │   ├── batchService.ts
 │   │   │   ├── config.ts
 │   │   │   ├── datasetService.ts
 │   │   │   └── templateService.ts
 │   │   ├── store
+│   │   │   └── toast.ts
 │   │   ├── styles
 │   │   │   └── globals.css
 │   │   ├── types
 │   │   │   ├── batch.ts
+│   │   │   ├── dashboard.ts
 │   │   │   ├── dataset.ts
+│   │   │   ├── index.ts
 │   │   │   ├── script.ts
 │   │   │   └── template.ts
 │   │   └── utils
 │   │       ├── cronUtils.ts
 │   │       ├── date.ts
+│   │       ├── dateUtils.ts
+│   │       ├── field.ts
 │   │       ├── fieldValidation.ts
 │   │       ├── format.ts
+│   │       ├── logger.ts
 │   │       ├── scriptUtils.ts
 │   │       ├── scriptValidator.ts
 │   │       ├── validation.ts
@@ -112,4 +155,4 @@
 │   └── tsconfig.json
 └── yarn.lock
 
-32 directories, 81 files
+41 directories, 115 files

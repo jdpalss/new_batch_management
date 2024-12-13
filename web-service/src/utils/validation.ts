@@ -1,162 +1,81 @@
-import { TemplateField, TemplateValidationError } from '../types/template';
-import { FIELD_TYPES, VALIDATION_PATTERNS } from '../constants';
+import { stores } from '../lib/db';
+import { BatchConfig, Template, Dataset } from '../types';
+import * as cronValidator from 'cron-validator';
 
-export class TemplateValidator {
-  static validateFieldName(name: string): boolean {
-    return VALIDATION_PATTERNS.FIELD_NAME.test(name);
+export async function validateBatchConfig(config: Partial<BatchConfig>): Promise<void> {
+  const errors: string[] = [];
+
+  // Required fields validation
+  if (!config.title?.trim()) {
+    errors.push('배치명은 필수입니다');
   }
 
-  static validateFields(fields: TemplateField[]): TemplateValidationError[] {
-    const errors: TemplateValidationError[] = [];
-    const fieldNames = new Set<string>();
+  // Template validation
+  let template: Template | null = null;
+  if (!config.templateId) {
+    errors.push('템플릿을 선택해주세요');
+  } else {
+    template = await new Promise((resolve, reject) => {
+      stores.templates.findOne({ id: config.templateId }, (err: any, doc: Template | null) => {
+        if (err) reject(err);
+        resolve(doc);
+      });
+    });
+    
+    if (!template) {
+      errors.push('존재하지 않는 템플릿입니다');
+    }
+  }
 
-    fields.forEach((field, index) => {
-      // Check field name format
-      if (!this.validateFieldName(field.name)) {
-        errors.push({
-          field: field.name,
-          message: 'Field name must start with a letter and contain only letters, numbers, and underscores'
-        });
-      }
-
-      // Check for duplicate names
-      if (fieldNames.has(field.name)) {
-        errors.push({
-          field: field.name,
-          message: 'Duplicate field name'
-        });
-      }
-      fieldNames.add(field.name);
-
-      // Check required properties
-      if (!field.label?.trim()) {
-        errors.push({
-          field: field.name,
-          message: 'Field label is required'
-        });
-      }
-
-      // Validate field type specific requirements
-      this.validateFieldConfiguration(field, errors);
+  // Dataset validation
+  if (!config.datasetId) {
+    errors.push('데이터셋을 선택해주세요');
+  } else {
+    const dataset = await new Promise<Dataset | null>((resolve, reject) => {
+      stores.datasets.findOne({ id: config.datasetId }, (err: any, doc: Dataset | null) => {
+        if (err) reject(err);
+        resolve(doc);
+      });
     });
 
-    return errors;
+    if (!dataset) {
+      errors.push('존재하지 않는 데이터셋입니다');
+    } else if (template && dataset.templateId !== template.id) {
+      errors.push('템플릿과 데이터셋이 일치하지 않습니다');
+    }
   }
 
-  private static validateFieldConfiguration(
-    field: TemplateField,
-    errors: TemplateValidationError[]
-  ): void {
-    // Validate options for select fields
-    if ([FIELD_TYPES.RADIO, FIELD_TYPES.CHECKBOX, FIELD_TYPES.COMBO].includes(field.type)) {
-      if (!field.options?.length) {
-        errors.push({
-          field: field.name,
-          message: `${field.type} field must have at least one option`
-        });
+  // Schedule validation
+  if (!config.schedule) {
+    errors.push('스케줄 설정은 필수입니다');
+  } else {
+    if (!['periodic', 'specific'].includes(config.schedule.type)) {
+      errors.push('유효하지 않은 스케줄 유형입니다');
+    }
+
+    if (config.schedule.type === 'periodic') {
+      if (!config.schedule.cronExpression) {
+        errors.push('Cron 표현식을 입력해주세요');
+      } else if (!cronValidator.isValidCron(config.schedule.cronExpression)) {
+        errors.push('유효하지 않은 Cron 표현식입니다');
+      }
+    }
+
+    if (config.schedule.type === 'specific') {
+      if (!Array.isArray(config.schedule.executionDates) || 
+          config.schedule.executionDates.length === 0) {
+        errors.push('최소 하나의 실행 일시를 선택해주세요');
       } else {
-        // Check for duplicate option values
-        const optionValues = new Set<string>();
-        field.options.forEach(option => {
-          if (!option.label?.trim() || !option.value?.trim()) {
-            errors.push({
-              field: field.name,
-              message: 'Option label and value are required'
-            });
+        config.schedule.executionDates.forEach((date, index) => {
+          if (isNaN(new Date(date).getTime())) {
+            errors.push(`${index + 1}번째 실행 일시가 유효하지 않습니다`);
           }
-          if (optionValues.has(option.value)) {
-            errors.push({
-              field: field.name,
-              message: `Duplicate option value: ${option.value}`
-            });
-          }
-          optionValues.add(option.value);
-        });
-      }
-    }
-
-    // Validate numeric constraints
-    if (field.type === FIELD_TYPES.NUMBER && field.validation) {
-      const { min, max } = field.validation;
-      if (min !== undefined && max !== undefined && min > max) {
-        errors.push({
-          field: field.name,
-          message: 'Minimum value cannot be greater than maximum value'
-        });
-      }
-    }
-
-    // Validate regex pattern
-    if (field.validation?.pattern) {
-      try {
-        new RegExp(field.validation.pattern);
-      } catch {
-        errors.push({
-          field: field.name,
-          message: 'Invalid regular expression pattern'
         });
       }
     }
   }
 
-  static validateScript(script: string): TemplateValidationError[] {
-    const errors: TemplateValidationError[] = [];
-    
-    try {
-      // Basic syntax check
-      new Function('context', script);
-      
-      // Verify script structure
-      if (!script.includes('async function')) {
-        errors.push({
-          field: 'script',
-          message: 'Script must be defined as an async function'
-        });
-      }
-
-      if (!script.includes('try') || !script.includes('catch')) {
-        errors.push({
-          field: 'script',
-          message: 'Script must include error handling with try/catch'
-        });
-      }
-
-      if (!script.includes('await')) {
-        errors.push({
-          field: 'script',
-          message: 'Script should use await for asynchronous operations'
-        });
-      }
-
-      // Context 객체 구조 분해가 있는지 확인
-      if (!script.includes('const { page, data, log }') && !script.includes('const { page }') && !script.includes('context.page')) {
-        errors.push({
-          field: 'script',
-          message: 'Script must use page from context for automation'
-        });
-      }
-
-      if (!script.includes('data.') && !script.includes('context.data.')) {
-        errors.push({
-          field: 'script',
-          message: 'Script should use dataset values (data object)'
-        });
-      }
-
-      if (!script.includes('log(') && !script.includes('context.log(')) {
-        errors.push({
-          field: 'script',
-          message: 'Script should include logging'
-        });
-      }
-
-    } catch (error) {
-      errors.push({
-        field: 'script',
-        message: error instanceof Error ? error.message : 'Invalid script syntax'
-      });
-    }
-    
-    return errors;
+  if (errors.length > 0) {
+    throw new Error(errors.join(', '));
   }
 }

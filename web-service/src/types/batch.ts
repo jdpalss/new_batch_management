@@ -1,4 +1,17 @@
-import { Page } from 'playwright';
+export enum BatchStatus {
+  PENDING = 'PENDING',
+  RUNNING = 'RUNNING',
+  SUCCESS = 'SUCCESS',
+  FAILURE = 'FAILURE',
+  STOPPED = 'STOPPED'
+}
+
+export interface ScheduleConfig {
+  type: 'periodic' | 'specific';
+  cronExpression?: string;
+  executionDates?: string[];
+  randomDelay?: boolean;
+}
 
 export interface BatchConfig {
   id: string;
@@ -8,46 +21,79 @@ export interface BatchConfig {
   datasetId: string;
   isActive: boolean;
   schedule: ScheduleConfig;
+  lastExecutedAt?: Date;
+  nextExecutionAt?: Date;
   createdAt: Date;
   updatedAt: Date;
-  lastRun?: Date;
-  nextRun?: Date;
 }
 
-export interface ScheduleConfig {
-  type: 'periodic' | 'specific';
-  cronExpression?: string;
-  executionDates?: Date[];
-  randomDelay?: number;  // milliseconds
-}
-
-export interface BatchContext {
-  page: Page;
-  data: any;
-  log: (message: string, metadata?: any) => void;
-  error: (message: string, error?: Error) => void;
+export interface BatchExecution {
+  id: string;
+  batchId: string;
+  status: BatchStatus;
+  startTime: Date;
+  endTime?: Date;
+  error?: string;
+  executionTime?: number;
+  logs: string[];
 }
 
 export interface BatchResult {
   id: string;
   batchId: string;
+  executionId: string;
   status: BatchStatus;
+  timestamp: Date;
   executionTime: number;
   error?: string;
-  timestamp: Date;
-  logs: BatchLogEntry[];
+  data?: any;
 }
 
-export enum BatchStatus {
-  SUCCESS = 'success',
-  FAILURE = 'failure',
-  RUNNING = 'running',
-  STOPPED = 'stopped'
+export interface BatchStats {
+  totalExecutions: number;
+  successCount: number;
+  failureCount: number;
+  averageExecutionTime: number;
+  lastExecutionStatus?: BatchStatus;
+  lastExecutionTime?: Date;
+  nextExecutionTime?: Date;
 }
 
-export interface BatchLogEntry {
+export interface BatchLog {
+  id: string;
+  batchId: string;
+  executionId: string;
   timestamp: Date;
-  level: 'info' | 'error' | 'warn';
+  level: 'info' | 'warn' | 'error';
   message: string;
   metadata?: Record<string, any>;
+}
+
+// 배치 필터링 및 정렬을 위한 타입
+export interface BatchFilter {
+  status?: BatchStatus;
+  templateId?: string;
+  isActive?: boolean;
+  from?: Date;
+  to?: Date;
+}
+
+export interface BatchSort {
+  field: keyof BatchConfig | 'lastExecutionStatus';
+  direction: 'asc' | 'desc';
+}
+
+// 배치 실행 시 사용되는 컨텍스트
+export interface BatchExecutionContext {
+  batchId: string;
+  executionId: string;
+  templateId: string;
+  datasetId: string;
+  templateData: any;
+  dataset: any;
+  logger: {
+    info: (message: string, metadata?: Record<string, any>) => void;
+    warn: (message: string, metadata?: Record<string, any>) => void;
+    error: (message: string, metadata?: Record<string, any>) => void;
+  };
 }
