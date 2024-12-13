@@ -1,34 +1,24 @@
 import React from 'react';
-import { Formik, Form, FormikProps } from 'formik';
+import { Formik, Form, Field, FormikProps } from 'formik';
 import {
   Button,
   Card,
   CardBody,
   FormGroup,
   Label,
-  Input
+  Input,
+  Alert
 } from 'reactstrap';
 import * as Yup from 'yup';
 import { Template } from '../../types/template';
 import { Dataset } from '../../types/dataset';
+import { BatchConfig } from '../../types/batch';
 
 interface BatchFormProps {
   templates: Template[];
   datasets: Dataset[];
-  initialValues?: any;
-  onSubmit: (values: any) => Promise<void>;
-}
-
-interface BatchFormValues {
-  title: string;
-  description?: string;
-  templateId: string;
-  datasetId: string;
-  isActive: boolean;
-  scheduleType: 'periodic' | 'specific';
-  cronExpression?: string;
-  executionDates?: string[];
-  randomDelay: boolean;
+  initialValues?: Partial<BatchConfig>;
+  onSubmit: (values: Partial<BatchConfig>) => Promise<void>;
 }
 
 const validationSchema = Yup.object().shape({
@@ -36,15 +26,32 @@ const validationSchema = Yup.object().shape({
   templateId: Yup.string().required('템플릿을 선택해주세요'),
   datasetId: Yup.string().required('데이터셋을 선택해주세요'),
   scheduleType: Yup.string().oneOf(['periodic', 'specific']).required(),
-  cronExpression: Yup.string().when('scheduleType', {
-    is: 'periodic',
-    then: Yup.string().required('Cron 표현식을 입력해주세요')
-  }),
-  executionDates: Yup.array().when('scheduleType', {
-    is: 'specific',
-    then: Yup.array().min(1, '최소 하나의 실행 일시를 선택해주세요')
+  schedule: Yup.object().shape({
+    type: Yup.string().oneOf(['periodic', 'specific']).required(),
+    cronExpression: Yup.string().when('type', {
+      is: 'periodic',
+      then: schema => schema.required('Cron 표현식을 입력해주세요')
+    }),
+    executionDates: Yup.array().when('type', {
+      is: 'specific',
+      then: schema => schema.min(1, '최소 하나의 실행 일시를 선택해주세요')
+    })
   })
 });
+
+const defaultValues: Partial<BatchConfig> = {
+  title: '',
+  description: '',
+  templateId: '',
+  datasetId: '',
+  isActive: true,
+  schedule: {
+    type: 'periodic',
+    cronExpression: '0 0 * * *',
+    executionDates: [],
+    randomDelay: 0
+  }
+};
 
 export const BatchForm: React.FC<BatchFormProps> = ({
   templates,
@@ -52,63 +59,48 @@ export const BatchForm: React.FC<BatchFormProps> = ({
   initialValues,
   onSubmit
 }) => {
-  const defaultValues: BatchFormValues = {
-    title: '',
-    description: '',
-    templateId: '',
-    datasetId: '',
-    isActive: true,
-    scheduleType: 'periodic',
-    cronExpression: '0 0 * * *',
-    executionDates: [],
-    randomDelay: false,
-    ...initialValues
-  };
-
   return (
     <Formik
-      initialValues={defaultValues}
+      initialValues={{ ...defaultValues, ...initialValues }}
       validationSchema={validationSchema}
       onSubmit={onSubmit}
     >
-      {({ values, errors, touched, handleChange, setFieldValue }: FormikProps<BatchFormValues>) => (
+      {({ values, errors, touched, handleChange, setFieldValue, isSubmitting }: FormikProps<BatchConfig>) => (
         <Form>
           <Card className="mb-4">
             <CardBody>
               <FormGroup>
                 <Label for="title">배치명</Label>
-                <Input
-                  id="title"
+                <Field
                   name="title"
-                  value={values.title}
-                  onChange={handleChange}
-                  invalid={touched.title && !!errors.title}
+                  type="text"
+                  className={`form-control ${touched.title && errors.title ? 'is-invalid' : ''}`}
                 />
+                {touched.title && errors.title && (
+                  <div className="invalid-feedback">{errors.title}</div>
+                )}
               </FormGroup>
 
               <FormGroup>
                 <Label for="description">설명</Label>
-                <Input
-                  type="textarea"
-                  id="description"
+                <Field
                   name="description"
-                  value={values.description}
-                  onChange={handleChange}
+                  as="textarea"
+                  className="form-control"
+                  rows={3}
                 />
               </FormGroup>
 
               <FormGroup>
                 <Label for="templateId">템플릿</Label>
-                <Input
-                  type="select"
-                  id="templateId"
+                <Field
                   name="templateId"
-                  value={values.templateId}
-                  onChange={(e) => {
+                  as="select"
+                  className={`form-control ${touched.templateId && errors.templateId ? 'is-invalid' : ''}`}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                     setFieldValue('templateId', e.target.value);
                     setFieldValue('datasetId', '');
                   }}
-                  invalid={touched.templateId && !!errors.templateId}
                 >
                   <option value="">템플릿을 선택하세요</option>
                   {templates.map(template => (
@@ -116,85 +108,112 @@ export const BatchForm: React.FC<BatchFormProps> = ({
                       {template.name}
                     </option>
                   ))}
-                </Input>
+                </Field>
+                {touched.templateId && errors.templateId && (
+                  <div className="invalid-feedback">{errors.templateId}</div>
+                )}
               </FormGroup>
 
               <FormGroup>
                 <Label for="datasetId">데이터셋</Label>
-                <Input
-                  type="select"
-                  id="datasetId"
+                <Field
                   name="datasetId"
-                  value={values.datasetId}
-                  onChange={handleChange}
-                  invalid={touched.datasetId && !!errors.datasetId}
+                  as="select"
+                  className={`form-control ${touched.datasetId && errors.datasetId ? 'is-invalid' : ''}`}
                   disabled={!values.templateId}
                 >
                   <option value="">
-                    {values.templateId
-                      ? '데이터셋을 선택하세요'
-                      : '템플릿을 먼저 선택하세요'}
+                    {values.templateId ? '데이터셋을 선택하세요' : '템플릿을 먼저 선택하세요'}
                   </option>
-                  {datasets
+                  {values.templateId && datasets
                     .filter(d => d.templateId === values.templateId)
                     .map(dataset => (
                       <option key={dataset.id} value={dataset.id}>
-                        {dataset.name || 'Unnamed Dataset'}
+                        {dataset.name || '이름 없는 데이터셋'}
                       </option>
                     ))}
-                </Input>
+                </Field>
+                {touched.datasetId && errors.datasetId && (
+                  <div className="invalid-feedback">{errors.datasetId}</div>
+                )}
               </FormGroup>
 
               <FormGroup>
-                <Label for="scheduleType">스케줄 유형</Label>
-                <Input
-                  type="select"
-                  id="scheduleType"
-                  name="scheduleType"
-                  value={values.scheduleType}
-                  onChange={handleChange}
+                <Label>스케줄 유형</Label>
+                <Field
+                  name="schedule.type"
+                  as="select"
+                  className="form-control"
                 >
-                  <option value="periodic">주기적</option>
-                  <option value="specific">특정 일시</option>
-                </Input>
+                  <option value="periodic">주기적 실행</option>
+                  <option value="specific">특정 일시 실행</option>
+                </Field>
               </FormGroup>
 
-              {values.scheduleType === 'periodic' && (
+              {values.schedule.type === 'periodic' && (
                 <FormGroup>
-                  <Label for="cronExpression">Cron 표현식</Label>
-                  <Input
-                    id="cronExpression"
-                    name="cronExpression"
-                    value={values.cronExpression}
-                    onChange={handleChange}
-                    placeholder="예: 0 0 * * * (매일 자정)"
-                    invalid={touched.cronExpression && !!errors.cronExpression}
+                  <Label>Cron 표현식</Label>
+                  <Field
+                    name="schedule.cronExpression"
+                    type="text"
+                    className={`form-control ${
+                      touched.schedule?.cronExpression && errors.schedule?.cronExpression ? 'is-invalid' : ''
+                    }`}
+                    placeholder="0 0 * * * (매일 자정)"
                   />
+                  {touched.schedule?.cronExpression && errors.schedule?.cronExpression && (
+                    <div className="invalid-feedback">{errors.schedule.cronExpression}</div>
+                  )}
                 </FormGroup>
               )}
 
-              {values.scheduleType === 'specific' && (
+              {values.schedule.type === 'specific' && (
                 <FormGroup>
-                  <Label for="executionDates">실행 일시</Label>
-                  <Input
-                    type="datetime-local"
-                    multiple
-                    id="executionDates"
-                    name="executionDates"
-                    value={values.executionDates}
-                    onChange={handleChange}
-                    invalid={touched.executionDates && !!errors.executionDates}
-                  />
+                  <Label>실행 일시</Label>
+                  <div className="mb-2">
+                    <Input
+                      type="datetime-local"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const currentDates = values.schedule.executionDates || [];
+                          setFieldValue('schedule.executionDates', [...currentDates, e.target.value]);
+                        }
+                      }}
+                    />
+                  </div>
+                  {Array.isArray(values.schedule.executionDates) && values.schedule.executionDates.length > 0 && (
+                    <div className="mb-2">
+                      <strong>선택된 실행 일시:</strong>
+                      <ul className="list-unstyled mt-2">
+                        {values.schedule.executionDates.map((date, index) => (
+                          <li key={index} className="d-flex align-items-center mb-1">
+                            <span>{new Date(date).toLocaleString()}</span>
+                            <Button
+                              color="danger"
+                              size="sm"
+                              className="ms-2"
+                              onClick={() => {
+                                const newDates = [...values.schedule.executionDates];
+                                newDates.splice(index, 1);
+                                setFieldValue('schedule.executionDates', newDates);
+                              }}
+                            >
+                              삭제
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </FormGroup>
               )}
 
-              <FormGroup check>
+              <FormGroup check className="mb-3">
                 <Label check>
-                  <Input
+                  <Field
                     type="checkbox"
-                    name="randomDelay"
-                    checked={values.randomDelay}
-                    onChange={handleChange}
+                    name="schedule.randomDelay"
+                    className="form-check-input"
                   />{' '}
                   실행 시 무작위 지연 추가
                 </Label>
@@ -202,11 +221,10 @@ export const BatchForm: React.FC<BatchFormProps> = ({
 
               <FormGroup check>
                 <Label check>
-                  <Input
+                  <Field
                     type="checkbox"
                     name="isActive"
-                    checked={values.isActive}
-                    onChange={handleChange}
+                    className="form-check-input"
                   />{' '}
                   활성화
                 </Label>
@@ -215,8 +233,8 @@ export const BatchForm: React.FC<BatchFormProps> = ({
           </Card>
 
           <div className="d-flex justify-content-end">
-            <Button type="submit" color="primary">
-              배치 저장
+            <Button type="submit" color="primary" disabled={isSubmitting}>
+              {isSubmitting ? '저장 중...' : '배치 저장'}
             </Button>
           </div>
         </Form>

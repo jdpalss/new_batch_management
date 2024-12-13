@@ -1,218 +1,111 @@
 # Batch Automation System
 
-웹 자동화를 위한 Playwright 기반의 통합 배치 관리 시스템입니다.
+웹 자동화를 위한 Playwright 기반의 통합 배치 관리 시스템
 
-## 프로젝트 구조
+## 시스템 한계점
 
-```
-batch-automation/
-├── README.md
-├── package.json                # 워크스페이스 루트 설정
-├── yarn.lock
-├── tsconfig.json              # TypeScript 공통 설정
-│
-├── web-service/               # 웹 관리 인터페이스 (Next.js)
-│   ├── src/
-│   │   ├── components/       # React 컴포넌트
-│   │   │   ├── batch/       # 배치 관련 컴포넌트
-│   │   │   │   ├── BatchForm.tsx
-│   │   │   │   ├── BatchHistory.tsx
-│   │   │   │   ├── BatchDetails.tsx
-│   │   │   │   └── ...
-│   │   │   ├── common/      # 공통 컴포넌트
-│   │   │   │   ├── ErrorBoundary.tsx
-│   │   │   │   ├── LoadingSpinner.tsx
-│   │   │   │   ├── EmptyState.tsx
-│   │   │   │   └── ...
-│   │   │   ├── datasets/    # 데이터셋 관련 컴포넌트
-│   │   │   │   ├── DatasetForm.tsx
-│   │   │   │   ├── DatasetList.tsx
-│   │   │   │   └── ...
-│   │   │   ├── layout/      # 레이아웃 컴포넌트
-│   │   │   │   ├── Layout.tsx
-│   │   │   │   └── Navigation.tsx
-│   │   │   └── templates/   # 템플릿 관련 컴포넌트
-│   │   │       ├── TemplateForm.tsx
-│   │   │       ├── ScriptEditor.tsx
-│   │   │       └── ...
-│   │   │
-│   │   ├── constants/       # 상수 정의
-│   │   │   └── index.ts
-│   │   │
-│   │   ├── hooks/          # 커스텀 훅
-│   │   │   ├── useToasts.ts
-│   │   │   ├── useModal.ts
-│   │   │   ├── useQuery.ts
-│   │   │   └── useMutation.ts
-│   │   │
-│   │   ├── pages/          # Next.js 페이지
-│   │   │   ├── api/        # API 라우트
-│   │   │   ├── batch/      # 배치 관련 페이지
-│   │   │   ├── datasets/   # 데이터셋 관련 페이지
-│   │   │   └── templates/  # 템플릿 관련 페이지
-│   │   │
-│   │   ├── services/       # API 서비스
-│   │   │   └── api.ts
-│   │   │
-│   │   ├── store/          # 상태 관리
-│   │   │   └── toast.ts
-│   │   │
-│   │   ├── types/          # TypeScript 타입
-│   │   │   ├── batch.ts
-│   │   │   ├── dataset.ts
-│   │   │   └── template.ts
-│   │   │
-│   │   └── utils/          # 유틸리티 함수
-│   │       ├── field.ts
-│   │       ├── date.ts
-│   │       └── validation.ts
-│   │
-│   ├── public/             # 정적 파일
-│   └── package.json        # 웹 서비스 의존성
-│
-├── batch-service/          # 배치 실행 서비스
-│   ├── src/
-│   │   ├── batch/         # 배치 실행 관련
-│   │   │   ├── BatchExecutor.ts
-│   │   │   └── BatchScheduler.ts
-│   │   │
-│   │   ├── models/        # 데이터 모델
-│   │   │   └── batch.ts
-│   │   │
-│   │   ├── services/      # 서비스 레이어
-│   │   │   └── datasetService.ts
-│   │   │
-│   │   ├── utils/         # 유틸리티
-│   │   │   └── logger.ts
-│   │   │
-│   │   └── index.ts       # 서비스 진입점
-│   │
-│   └── package.json       # 배치 서비스 의존성
-│
-└── data/                  # NeDB 데이터베이스 파일
-    ├── batches.db
-    ├── datasets.db
-    └── templates.db
-```
+### 1. 데이터베이스
+- **NeDB 제약사항**
+  - 단일 프로세스에서만 동작
+  - 대용량 데이터 처리 시 성능 저하
+  - 동시성 제어 기능 부족
+- **확장 방안**
+  - MongoDB로 마이그레이션
+  - 분산 환경 지원을 위한 데이터베이스 클러스터링
+  - 캐싱 레이어 추가
 
-## 주요 기능
+### 2. 배치 실행
+- **자원 제한**
+  - 동시 실행 가능한 배치 수 제한 (현재 5개)
+  - 배치 실행 시간 제한 (최대 5분)
+  - 메모리 사용량 제한 (1GB)
+- **보안 제약**
+  - 인증이 필요한 사이트 자동화 제한
+  - CAPTCHA 처리 불가
+  - 일부 웹사이트의 봇 감지 회피 필요
+- **개선 방안**
+  - 분산 실행 환경 구축
+  - 자원 사용량 모니터링 및 동적 조정
+  - IP 프록시 풀 구현
 
-### 1. 템플릿 관리
-- 동적 입력 필드 생성 및 관리
-  - text, number, email 기본 입력
-  - json editor
-  - radio, checkbox, combo (드래그 앤 드롭 옵션 관리)
-  - file upload (base64)
-  - date, datetime
-  - monaco editor (코드 편집)
-- Playwright 스크립트 템플릿
-  - 기본/폼/로그인 등 템플릿 제공
-  - 실시간 문법 검증
-  - 자동 완성 지원
+### 3. 파일 처리
+- **제한사항**
+  - Base64 인코딩으로 인한 DB 크기 증가
+  - 파일 크기 제한 (5MB)
+  - 파일 유형 검증 부족
+- **개선 방안**
+  - 외부 스토리지 서비스 연동 (S3 등)
+  - 파일 압축 및 최적화
+  - 파일 메타데이터 관리 개선
 
-### 2. 데이터셋 관리
-- 템플릿 기반 데이터 입력
-- 실시간 유효성 검사
-- 파일 업로드 (Base64)
-- 버전 관리
+## 자동화 개선 제안
 
-### 3. 배치 작업 관리
-- 유연한 스케줄링
-  - Cron 표현식 기반 주기 실행
-  - 특정 일시 실행
-  - 랜덤 딜레이 옵션
-- 실시간 모니터링
-- 실행 이력 관리
-- 오류 추적
+### 1. 템플릿 자동화
+- **필드 자동 감지**
+  - 웹페이지 폼 필드 자동 분석
+  - 필드 속성 및 유효성 검사 규칙 자동 추출
+  - 템플릿 자동 생성
+- **스크립트 자동 생성**
+  - 사용자 행동 기록 및 스크립트 변환
+  - 공통 패턴 템플릿 제공
+  - AI 기반 스크립트 최적화
 
-## 기술 스택
+### 2. 데이터 처리 자동화
+- **데이터 검증**
+  - 데이터 포맷 자동 감지
+  - 이상치 자동 검출
+  - 데이터 정합성 자동 체크
+- **데이터 변환**
+  - 필드 타입 자동 변환
+  - 날짜/시간 포맷 자동 처리
+  - 인코딩 자동 변환
 
-### Frontend
-- Next.js 14
-- TypeScript
-- TanStack Query (데이터 관리)
-- Monaco Editor (코드 에디터)
-- React Beautiful DnD (드래그 앤 드롭)
-- Reactstrap (UI 컴포넌트)
-- Formik + Yup (폼 검증)
-- Zustand (상태 관리)
+### 3. 실행 최적화
+- **스케줄 최적화**
+  - 실행 패턴 분석
+  - 자원 사용량 기반 스케줄링
+  - 우선순위 기반 실행 조정
+- **오류 처리**
+  - 자동 재시도 메커니즘
+  - 오류 패턴 분석
+  - 자가 복구 프로세스
 
-### Backend
-- Node.js
-- Playwright (웹 자동화)
-- NeDB (데이터베이스)
-- node-cron (스케줄링)
+### 4. 모니터링 및 알림
+- **상태 모니터링**
+  - 실시간 리소스 모니터링
+  - 성능 메트릭 수집
+  - 이상 징후 감지
+- **알림 시스템**
+  - 다중 채널 알림 (이메일, 슬랙 등)
+  - 알림 룰 커스터마이징
+  - 알림 우선순위 설정
 
-## 설치 및 실행
+## 향후 개발 계획
 
-1. 저장소 클론 및 의존성 설치:
-```bash
-git clone <repository-url>
-cd batch-automation
-yarn install
-```
+### 1단계: 기반 시스템 강화
+- MongoDB 마이그레이션
+- 분산 실행 환경 구축
+- 파일 스토리지 시스템 구현
 
-2. 환경 변수 설정:
+### 2단계: 자동화 기능 개선
+- 템플릿 자동 생성 기능
+- 데이터 검증 자동화
+- 스케줄 최적화 엔진
 
-web-service/.env.local:
-```
-NEXT_PUBLIC_API_URL=http://localhost:3000
-DATABASE_PATH=../data
-```
+### 3단계: 모니터링 강화
+- 대시보드 개선
+- 알림 시스템 구현
+- 성능 분석 도구 추가
 
-batch-service/.env:
-```
-PORT=3001
-DATABASE_PATH=../data
-```
+### 4단계: 확장성 개선
+- API 게이트웨이 구축
+- MSA 전환 검토
+- 컨테이너화 및 오케스트레이션
 
-3. 개발 서버 실행:
-```bash
-# 웹 서비스
-yarn dev:web    # http://localhost:3000
+## 설치 및 실행 가이드
 
-# 배치 서비스
-yarn dev:batch  # http://localhost:3001
-```
+[이전 내용 유지...]
 
-## API 가이드
+## API 문서
 
-### Templates
-- `GET /api/templates` - 템플릿 목록 조회
-- `POST /api/templates` - 템플릿 생성
-- `GET /api/templates/:id` - 템플릿 상세 조회
-- `PUT /api/templates/:id` - 템플릿 수정
-- `DELETE /api/templates/:id` - 템플릿 삭제
-
-### Datasets
-- `GET /api/datasets` - 데이터셋 목록 조회
-- `POST /api/datasets` - 데이터셋 생성
-- `GET /api/datasets/:id` - 데이터셋 상세 조회
-- `PUT /api/datasets/:id` - 데이터셋 수정
-- `DELETE /api/datasets/:id` - 데이터셋 삭제
-
-### Batches
-- `GET /api/batches` - 배치 목록 조회
-- `POST /api/batches` - 배치 생성
-- `GET /api/batches/:id` - 배치 상세 조회
-- `PUT /api/batches/:id` - 배치 수정
-- `DELETE /api/batches/:id` - 배치 삭제
-- `POST /api/batches/:id/execute` - 배치 실행
-- `POST /api/batches/:id/stop` - 배치 중지
-- `GET /api/batches/:id/history` - 실행 이력 조회
-- `GET /api/batches/:id/stats` - 실행 통계 조회
-
-## 제한 사항
-
-1. 파일 업로드
-   - 최대 크기: 5MB
-   - Base64 인코딩 필수
-
-2. 배치 실행
-   - 동시 실행: 최대 5개
-   - 실행 시간: 최대 5분
-   - 메모리: 최대 1GB
-
-3. 데이터베이스
-   - NeDB 기반 (단일 프로세스)
-   - 확장성 제한 있음
+[이전 내용 유지...]

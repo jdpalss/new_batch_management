@@ -1,27 +1,48 @@
-import React from 'react';
+import type { NextPage } from 'next';
 import { useRouter } from 'next/router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import axios from 'axios';
 import {
   Button,
-  Card,
-  CardBody,
-  Table,
-  Badge
+  Container,
+  Badge,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter
 } from 'reactstrap';
-import axios from 'axios';
 import { Template } from '../../types/template';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { formatDateTime } from '../../utils/dateUtils';
 import { PageHeader } from '../../components/common/PageHeader';
+import { GridView } from '../../components/common/GridView';
+import { EmptyState } from '../../components/common/EmptyState';
+import { useToasts } from '../../hooks/useToasts';
+import { useState } from 'react';
 
-const TemplatesPage: React.FC = () => {
+const TemplatesPage: NextPage = () => {
   const router = useRouter();
+  const { success, error } = useToasts();
+  const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
 
-  const { data: templates, isLoading } = useQuery<Template[]>({
+  const { data: templates, isLoading, refetch } = useQuery<Template[]>({
     queryKey: ['templates'],
     queryFn: async () => {
-      const response = await axios.get('/api/template');
-      return response.data;
+      const { data } = await axios.get('/api/template');
+      return data;
+    }
+  });
+
+  const deleteTemplate = useMutation({
+    mutationFn: async (templateId: string) => {
+      await axios.delete(`/api/template/${templateId}`);
+    },
+    onSuccess: () => {
+      success('템플릿이 삭제되었습니다');
+      setDeleteTarget(null);
+      refetch();
+    },
+    onError: (err) => {
+      error(err instanceof Error ? err.message : '템플릿 삭제 중 오류가 발생했습니다');
     }
   });
 
@@ -29,68 +50,87 @@ const TemplatesPage: React.FC = () => {
     return <LoadingSpinner />;
   }
 
+  if (!templates?.length) {
+    return (
+      <Container className="py-4">
+        <EmptyState
+          title="템플릿이 없습니다"
+          description="배치 작업을 위한 새로운 템플릿을 생성해보세요."
+          action={{
+            label: '템플릿 생성',
+            onClick: () => router.push('/templates/create')
+          }}
+        />
+      </Container>
+    );
+  }
+
   return (
-    <div>
+    <Container className="py-4">
       <PageHeader
-        title="Templates"
+        title="템플릿"
+        description="배치 작업을 위한 템플릿을 관리합니다"
         action={
-          <Button 
+          <Button
             color="primary"
             onClick={() => router.push('/templates/create')}
           >
-            Create Template
+            템플릿 생성
           </Button>
         }
       />
 
-      <Card>
-        <CardBody>
-          <Table hover responsive>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Fields</th>
-                <th>Version</th>
-                <th>Last Updated</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates?.map((template) => (
-                <tr key={template.id}>
-                  <td>{template.name}</td>
-                  <td>{template.description}</td>
-                  <td>
-                    <Badge color="info">
-                      {template.fields.length} fields
-                    </Badge>
-                  </td>
-                  <td>v{template.version}</td>
-                  <td>{formatDateTime(template.updatedAt)}</td>
-                  <td>
-                    <Button
-                      color="link"
-                      size="sm"
-                      onClick={() => router.push(`/templates/edit/${template.id}`)}
-                    >
-                      Edit
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {!templates?.length && (
-                <tr>
-                  <td colSpan={6} className="text-center py-4">
-                    No templates found. Create your first template to get started.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
-        </CardBody>
-      </Card>
-    </div>
+      <GridView
+        items={templates}
+        onItemClick={(template) => router.push(`/templates/edit/${template.id}`)}
+        renderBadge={(template) => (
+          <Badge color="info">
+            {template.fields.length}개 필드
+          </Badge>
+        )}
+        renderExtraInfo={(template) => (
+          <Button
+            color="danger"
+            size="sm"
+            outline
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(template);
+            }}
+          >
+            삭제
+          </Button>
+        )}
+      />
+
+      <Modal isOpen={!!deleteTarget} toggle={() => setDeleteTarget(null)}>
+        <ModalHeader toggle={() => setDeleteTarget(null)}>
+          템플릿 삭제 확인
+        </ModalHeader>
+        <ModalBody>
+          {deleteTarget?.name || 'Unnamed'} 템플릿을 삭제하시겠습니까?
+          <br />
+          <small className="text-danger">
+            * 이 작업은 되돌릴 수 없습니다.
+          </small>
+        </ModalBody>
+        <ModalFooter>
+          <Button 
+            color="danger"
+            onClick={() => deleteTarget && deleteTemplate.mutate(deleteTarget.id)}
+            disabled={deleteTemplate.isPending}
+          >
+            {deleteTemplate.isPending ? '삭제 중...' : '삭제'}
+          </Button>
+          <Button 
+            color="secondary" 
+            onClick={() => setDeleteTarget(null)}
+          >
+            취소
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </Container>
   );
 };
 

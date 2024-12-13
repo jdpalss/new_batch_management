@@ -1,5 +1,5 @@
 import React from 'react';
-import { Formik, Form, FieldArray } from 'formik';
+import { Formik, Form } from 'formik';
 import {
   Card,
   CardBody,
@@ -8,59 +8,33 @@ import {
   FormGroup,
   Label,
   Input,
-  Row,
-  Col,
-  ListGroup,
-  ListGroupItem,
+  Alert
 } from 'reactstrap';
 import * as Yup from 'yup';
-import { Template, TemplateField, FieldType } from '../../types/template';
+import { Template, TemplateField } from '../../types/template';
 import { ScriptEditor } from './ScriptEditor';
 import { FieldOptionsModal } from './FieldOptionsModal';
 import { useModal } from '../../hooks/useModal';
+import { FIELD_TYPES } from '../../constants';
+
+const validationSchema = Yup.object().shape({
+  name: Yup.string().required('템플릿 이름을 입력해주세요'),
+  fields: Yup.array().of(
+    Yup.object().shape({
+      name: Yup.string()
+        .required('필드 이름을 입력해주세요')
+        .matches(/^[가-힣a-zA-Z][가-힣a-zA-Z0-9_]*$/, '필드 이름은 한글/영문자로 시작하고 한글/영문자/숫자/밑줄만 사용할 수 있습니다'),
+      type: Yup.string().required('필드 타입을 선택해주세요'),
+      label: Yup.string().required('필드 라벨을 입력해주세요')
+    })
+  ),
+  script: Yup.string().required('스크립트를 입력해주세요')
+});
 
 interface TemplateFormProps {
   initialValues?: Partial<Template>;
   onSubmit: (values: Partial<Template>) => Promise<void>;
 }
-
-const fieldTypes: FieldType[] = [
-  'text',
-  'number',
-  'email',
-  'json',
-  'radio',
-  'textarea',
-  'checkbox',
-  'combo',
-  'file',
-  'date',
-  'datetime',
-  'code'
-];
-
-const validationSchema = Yup.object().shape({
-  name: Yup.string().required('Template name is required'),
-  fields: Yup.array().of(
-    Yup.object().shape({
-      name: Yup.string()
-        .required('Field name is required')
-        .matches(/^[a-zA-Z][a-zA-Z0-9_]*$/, 'Invalid field name format'),
-      type: Yup.string().required('Field type is required'),
-      label: Yup.string().required('Field label is required'),
-      required: Yup.boolean()
-    })
-  ),
-  script: Yup.string().required('Script is required')
-});
-
-const defaultField: TemplateField = {
-  name: '',
-  type: 'text',
-  label: '',
-  required: false,
-  options: []
-};
 
 export const TemplateForm: React.FC<TemplateFormProps> = ({
   initialValues,
@@ -77,10 +51,6 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
     ...initialValues
   };
 
-  const needsOptions = (type: FieldType): boolean => {
-    return ['radio', 'checkbox', 'combo'].includes(type);
-  };
-
   return (
     <Formik
       initialValues={defaultValues}
@@ -90,10 +60,10 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
       {({ values, setFieldValue, errors, touched, isSubmitting }) => (
         <Form>
           <Card className="mb-4">
-            <CardHeader>Template Information</CardHeader>
+            <CardHeader>템플릿 정보</CardHeader>
             <CardBody>
               <FormGroup>
-                <Label for="name">Template Name</Label>
+                <Label for="name">템플릿 이름</Label>
                 <Input
                   id="name"
                   name="name"
@@ -101,10 +71,13 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
                   onChange={(e) => setFieldValue('name', e.target.value)}
                   invalid={touched.name && !!errors.name}
                 />
+                {touched.name && errors.name && (
+                  <Alert color="danger" className="mt-2">{errors.name}</Alert>
+                )}
               </FormGroup>
 
               <FormGroup>
-                <Label for="description">Description</Label>
+                <Label for="description">설명</Label>
                 <Input
                   type="textarea"
                   id="description"
@@ -118,153 +91,142 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
 
           <Card className="mb-4">
             <CardHeader className="d-flex justify-content-between align-items-center">
-              <span>Fields</span>
-              <FieldArray name="fields">
-                {({ push }) => (
-                  <Button
-                    color="primary"
-                    size="sm"
-                    onClick={() => push({ ...defaultField })}
-                  >
-                    Add Field
-                  </Button>
-                )}
-              </FieldArray>
+              <span>필드</span>
+              <Button
+                color="primary"
+                size="sm"
+                onClick={() => {
+                  setFieldValue('fields', [
+                    ...values.fields,
+                    {
+                      name: '',
+                      type: FIELD_TYPES.TEXT,
+                      label: '',
+                      required: false
+                    }
+                  ]);
+                }}
+              >
+                필드 추가
+              </Button>
             </CardHeader>
             <CardBody>
-              <FieldArray name="fields">
-                {({ remove }) => (
-                  <>
-                    {values.fields?.map((field: TemplateField, index: number) => (
-                      <Row key={index} className="mb-4 pb-4 border-bottom">
-                        <Col md={3}>
-                          <FormGroup>
-                            <Label>Field Name</Label>
-                            <Input
-                              name={`fields.${index}.name`}
-                              value={field.name}
-                              onChange={(e) =>
-                                setFieldValue(`fields.${index}.name`, e.target.value)
-                              }
-                              placeholder="e.g., userName"
-                            />
-                            {touched.fields?.[index]?.name && errors.fields?.[index]?.name && (
-                              <div className="text-danger small mt-1">
-                                {errors.fields[index].name}
-                              </div>
-                            )}
-                          </FormGroup>
-                        </Col>
+              {values.fields.map((field, index) => (
+                <div key={index} className="border rounded p-3 mb-3">
+                  <div className="d-flex justify-content-between align-items-start mb-3">
+                    <h6 className="mb-0">필드 #{index + 1}</h6>
+                    <Button
+                      color="danger"
+                      size="sm"
+                      outline
+                      onClick={() => {
+                        const newFields = [...values.fields];
+                        newFields.splice(index, 1);
+                        setFieldValue('fields', newFields);
+                      }}
+                    >
+                      삭제
+                    </Button>
+                  </div>
 
-                        <Col md={3}>
-                          <FormGroup>
-                            <Label>Label</Label>
-                            <Input
-                              name={`fields.${index}.label`}
-                              value={field.label}
-                              onChange={(e) =>
-                                setFieldValue(`fields.${index}.label`, e.target.value)
-                              }
-                              placeholder="e.g., User Name"
-                            />
-                          </FormGroup>
-                        </Col>
+                  <FormGroup>
+                    <Label>필드 이름</Label>
+                    <Input
+                      value={field.name}
+                      onChange={e => {
+                        const newFields = [...values.fields];
+                        newFields[index] = {
+                          ...field,
+                          name: e.target.value
+                        };
+                        setFieldValue('fields', newFields);
+                      }}
+                      placeholder="예: userName"
+                    />
+                  </FormGroup>
 
-                        <Col md={3}>
-                          <FormGroup>
-                            <Label>Type</Label>
-                            <Input
-                              type="select"
-                              name={`fields.${index}.type`}
-                              value={field.type}
-                              onChange={(e) => {
-                                const newType = e.target.value as FieldType;
-                                setFieldValue(`fields.${index}.type`, newType);
-                                if (!needsOptions(newType)) {
-                                  setFieldValue(`fields.${index}.options`, undefined);
-                                }
-                              }}
-                            >
-                              {fieldTypes.map((type) => (
-                                <option key={type} value={type}>
-                                  {type}
-                                </option>
-                              ))}
-                            </Input>
-                          </FormGroup>
-                        </Col>
+                  <FormGroup>
+                    <Label>라벨</Label>
+                    <Input
+                      value={field.label}
+                      onChange={e => {
+                        const newFields = [...values.fields];
+                        newFields[index] = {
+                          ...field,
+                          label: e.target.value
+                        };
+                        setFieldValue('fields', newFields);
+                      }}
+                      placeholder="예: 사용자 이름"
+                    />
+                  </FormGroup>
 
-                        <Col md={3} className="d-flex align-items-center gap-3">
-                          <FormGroup check className="mb-0">
-                            <Label check>
-                              <Input
-                                type="checkbox"
-                                name={`fields.${index}.required`}
-                                checked={field.required}
-                                onChange={(e) =>
-                                  setFieldValue(
-                                    `fields.${index}.required`,
-                                    e.target.checked
-                                  )
-                                }
-                              />{' '}
-                              Required
-                            </Label>
-                          </FormGroup>
+                  <FormGroup>
+                    <Label>타입</Label>
+                    <div className="d-flex gap-2">
+                      <Input
+                        type="select"
+                        value={field.type}
+                        onChange={e => {
+                          const newType = e.target.value as keyof typeof FIELD_TYPES;
+                          const newFields = [...values.fields];
+                          newFields[index] = {
+                            ...field,
+                            type: newType,
+                            options: []
+                          };
+                          setFieldValue('fields', newFields);
+                        }}
+                        className="flex-grow-1"
+                      >
+                        {Object.entries(FIELD_TYPES).map(([key, value]) => (
+                          <option key={key} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </Input>
+                      {['radio', 'checkbox', 'combo'].includes(field.type) && (
+                        <Button
+                          color="secondary"
+                          outline
+                          onClick={() => openModal({ index, field })}
+                        >
+                          옵션 ({field.options?.length || 0})
+                        </Button>
+                      )}
+                    </div>
+                  </FormGroup>
 
-                          <div className="d-flex gap-2 align-items-center">
-                            {needsOptions(field.type) && (
-                              <Button
-                                color="info"
-                                outline
-                                size="sm"
-                                onClick={() => openModal({ index, field })}
-                              >
-                                Options ({field.options?.length || 0})
-                              </Button>
-                            )}
-                            <Button
-                              color="danger"
-                              outline
-                              size="sm"
-                              onClick={() => remove(index)}
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                        </Col>
+                  <FormGroup check className="mb-0">
+                    <Label check>
+                      <Input
+                        type="checkbox"
+                        checked={field.required}
+                        onChange={e => {
+                          const newFields = [...values.fields];
+                          newFields[index] = {
+                            ...field,
+                            required: e.target.checked
+                          };
+                          setFieldValue('fields', newFields);
+                        }}
+                      />{' '}
+                      필수 입력
+                    </Label>
+                  </FormGroup>
+                </div>
+              ))}
 
-                        {needsOptions(field.type) && field.options && field.options.length > 0 && (
-                          <Col md={12} className="mt-3">
-                            <div className="border rounded p-2 bg-light">
-                              <small className="text-muted d-block mb-2">Options:</small>
-                              <ListGroup horizontal>
-                                {field.options.map((option, optIdx) => (
-                                  <ListGroupItem key={optIdx} className="d-flex align-items-center py-1 px-3">
-                                    <span className="me-2">{option.label}</span>
-                                    <code className="small text-muted">({option.value})</code>
-                                  </ListGroupItem>
-                                ))}
-                              </ListGroup>
-                            </div>
-                          </Col>
-                        )}
-                      </Row>
-                    ))}
-
-                    {values.fields?.length === 0 && (
-                      <div className="text-center py-5 text-muted">
-                        No fields added yet. Click "Add Field" to start.
-                      </div>
-                    )}
-                  </>
-                )}
-              </FieldArray>
+              {values.fields.length === 0 && (
+                <div className="text-center text-muted py-4">
+                  필드가 없습니다. '필드 추가' 버튼을 클릭하여 추가해주세요.
+                </div>
+              )}
             </CardBody>
           </Card>
 
           <Card className="mb-4">
-            <CardHeader>Playwright Script</CardHeader>
+            <CardHeader>Playwright 스크립트</CardHeader>
             <CardBody>
               <ScriptEditor
                 value={values.script || ''}
@@ -275,7 +237,7 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
 
           <div className="d-flex justify-content-end">
             <Button type="submit" color="primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Template'}
+              {isSubmitting ? '저장 중...' : '템플릿 저장'}
             </Button>
           </div>
 
@@ -285,7 +247,12 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
               onClose={closeModal}
               field={selectedField.field}
               onSave={(options) => {
-                setFieldValue(`fields.${selectedField.index}.options`, options);
+                const newFields = [...values.fields];
+                newFields[selectedField.index] = {
+                  ...selectedField.field,
+                  options
+                };
+                setFieldValue('fields', newFields);
                 closeModal();
               }}
             />
