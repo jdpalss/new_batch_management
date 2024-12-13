@@ -1,226 +1,102 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
-  Table,
-  Badge,
-  Button,
-  Modal,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
   Card,
+  CardHeader,
   CardBody,
-  Nav,
-  NavItem,
-  NavLink,
-  TabContent,
-  TabPane
+  Table,
+  Badge
 } from 'reactstrap';
-import { BatchResult, BatchStatus } from '../../types/batch';
-import { LoadingSpinner } from '../common/LoadingSpinner';
-import { formatDateTime, formatDuration } from '../../utils/dateUtils';
+import { BatchService } from '../../services/api';
+import { BatchStatus } from '../../types/batch';
+import { formatDateTime, getRelativeTime } from '../../utils/date';
 
 interface BatchHistoryProps {
-  results: BatchResult[];
-  isLoading?: boolean;
+  batchId: string;
 }
 
-const StatusBadge: React.FC<{ status: BatchStatus }> = ({ status }) => {
-  const colors = {
-    [BatchStatus.SUCCESS]: 'success',
-    [BatchStatus.FAILURE]: 'danger',
-    [BatchStatus.RUNNING]: 'warning',
-    [BatchStatus.STOPPED]: 'secondary'
-  };
+export const BatchHistory: React.FC<BatchHistoryProps> = ({ batchId }) => {
+  const { data: history = [], isLoading } = useQuery({
+    queryKey: ['batchHistory', batchId],
+    queryFn: () => BatchService.getHistory(batchId),
+    refetchInterval: 5000 // 5초마다 갱신
+  });
 
-  const labels = {
-    [BatchStatus.SUCCESS]: '성공',
-    [BatchStatus.FAILURE]: '실패',
-    [BatchStatus.RUNNING]: '실행중',
-    [BatchStatus.STOPPED]: '중지됨'
-  };
-
-  return (
-    <Badge color={colors[status]}>
-      {labels[status]}
-    </Badge>
-  );
-};
-
-interface LogViewProps {
-  logs: BatchResult['logs'];
-}
-
-const LogView: React.FC<LogViewProps> = ({ logs }) => {
-  const getLogLevelClass = (level: 'info' | 'error' | 'warn') => {
-    switch (level) {
-      case 'error': return 'text-danger';
-      case 'warn': return 'text-warning';
-      default: return 'text-info';
+  const getStatusBadgeColor = (status: BatchStatus) => {
+    switch (status) {
+      case BatchStatus.SUCCESS:
+        return 'success';
+      case BatchStatus.FAILURE:
+        return 'danger';
+      case BatchStatus.RUNNING:
+        return 'primary';
+      case BatchStatus.PENDING:
+        return 'warning';
+      default:
+        return 'secondary';
     }
   };
 
-  if (logs.length === 0) {
-    return <div className="text-center py-4 text-muted">로그가 없습니다.</div>;
-  }
-
   return (
-    <div className="bg-dark text-light p-3 rounded" style={{ maxHeight: '400px', overflow: 'auto' }}>
-      {logs.map((log, index) => (
-        <div key={index} className={getLogLevelClass(log.level)}>
-          [{formatDateTime(log.timestamp)}] {log.message}
-          {log.metadata && (
-            <pre className="mt-1 ms-4 mb-2 small">
-              {JSON.stringify(log.metadata, null, 2)}
-            </pre>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-export const BatchHistory: React.FC<BatchHistoryProps> = ({
-  results,
-  isLoading
-}) => {
-  const [selectedResult, setSelectedResult] = useState<BatchResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'details' | 'logs'>('details');
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (results.length === 0) {
-    return (
-      <div className="text-center py-4 text-muted">
-        실행 이력이 없습니다.
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <Table hover responsive>
-        <thead>
-          <tr>
-            <th>상태</th>
-            <th>시작 시간</th>
-            <th>실행 시간</th>
-            <th>로그</th>
-            <th>에러</th>
-            <th>작업</th>
-          </tr>
-        </thead>
-        <tbody>
-          {results.map((result) => (
-            <tr key={result.id}>
-              <td>
-                <StatusBadge status={result.status} />
-              </td>
-              <td>{formatDateTime(result.timestamp)}</td>
-              <td>{formatDuration(result.executionTime)}</td>
-              <td>{result.logs.length}개</td>
-              <td>
-                {result.error && (
-                  <span className="text-danger">
-                    {result.error.length > 50
-                      ? `${result.error.substring(0, 50)}...`
-                      : result.error}
-                  </span>
-                )}
-              </td>
-              <td>
-                <Button
-                  color="link"
-                  size="sm"
-                  onClick={() => setSelectedResult(result)}
-                >
-                  상세보기
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-
-      <Modal
-        isOpen={!!selectedResult}
-        toggle={() => setSelectedResult(null)}
-        size="lg"
-      >
-        <ModalHeader toggle={() => setSelectedResult(null)}>
-          실행 상세 정보
-        </ModalHeader>
-        {selectedResult && (
-          <>
-            <ModalBody>
-              <Card className="mb-3">
-                <CardBody>
-                  <div className="row">
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <div className="text-muted small">상태</div>
-                        <StatusBadge status={selectedResult.status} />
-                      </div>
-                      <div className="mb-3">
-                        <div className="text-muted small">시작 시간</div>
-                        <div>{formatDateTime(selectedResult.timestamp)}</div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="mb-3">
-                        <div className="text-muted small">실행 시간</div>
-                        <div>{formatDuration(selectedResult.executionTime)}</div>
-                      </div>
-                      {selectedResult.error && (
-                        <div>
-                          <div className="text-muted small">에러</div>
-                          <div className="text-danger">{selectedResult.error}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
-
-              <Nav tabs>
-                <NavItem>
-                  <NavLink
-                    className={activeTab === 'details' ? 'active' : ''}
-                    onClick={() => setActiveTab('details')}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    실행 세부사항
-                  </NavLink>
-                </NavItem>
-                <NavItem>
-                  <NavLink
-                    className={activeTab === 'logs' ? 'active' : ''}
-                    onClick={() => setActiveTab('logs')}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    로그
-                  </NavLink>
-                </NavItem>
-              </Nav>
-
-              <TabContent activeTab={activeTab} className="mt-3">
-                <TabPane tabId="details">
-                  {/* TODO: Add execution details */}
-                </TabPane>
-                <TabPane tabId="logs">
-                  <LogView logs={selectedResult.logs} />
-                </TabPane>
-              </TabContent>
-            </ModalBody>
-            <ModalFooter>
-              <Button color="secondary" onClick={() => setSelectedResult(null)}>
-                닫기
-              </Button>
-            </ModalFooter>
-          </>
+    <Card className="mb-4">
+      <CardHeader>
+        <h4 className="mb-0">실행 이력</h4>
+      </CardHeader>
+      <CardBody>
+        {isLoading ? (
+          <div className="text-center p-3">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">로딩중...</span>
+            </div>
+          </div>
+        ) : history.length === 0 ? (
+          <div className="text-center text-muted p-3">
+            실행 이력이 없습니다.
+          </div>
+        ) : (
+          <div className="table-responsive">
+            <Table className="mb-0">
+              <thead>
+                <tr>
+                  <th>실행 시작</th>
+                  <th>상태</th>
+                  <th>실행 시간</th>
+                  <th>결과</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((execution) => (
+                  <tr key={execution.id}>
+                    <td>
+                      <div>{formatDateTime(new Date(execution.startTime))}</div>
+                      <small className="text-muted">
+                        {getRelativeTime(new Date(execution.startTime))}
+                      </small>
+                    </td>
+                    <td>
+                      <Badge color={getStatusBadgeColor(execution.status)}>
+                        {execution.status}
+                      </Badge>
+                    </td>
+                    <td>
+                      {execution.executionTime ? 
+                        `${(execution.executionTime / 1000).toFixed(1)}초` : 
+                        '-'}
+                    </td>
+                    <td>
+                      {execution.error ? (
+                        <span className="text-danger">{execution.error}</span>
+                      ) : execution.success ? (
+                        <span className="text-success">성공</span>
+                      ) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
         )}
-      </Modal>
-    </>
+      </CardBody>
+    </Card>
   );
 };

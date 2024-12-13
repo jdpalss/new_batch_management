@@ -20,8 +20,8 @@ export const BatchStats: React.FC<BatchStatsProps> = ({ stats }) => {
   };
 
   const calculateSuccessRate = (): string => {
-    if (stats.total === 0) return '0%';
-    return `${((stats.success / stats.total) * 100).toFixed(1)}%`;
+    if (stats?.total === 0) return '0%';
+    return `${((stats?.success / stats?.total) * 100).toFixed(1)}%`;
   };
 
   return (
@@ -32,7 +32,7 @@ export const BatchStats: React.FC<BatchStatsProps> = ({ stats }) => {
           <Col md={3}>
             <div className="stat-card">
               <div className="stat-title">Total Executions</div>
-              <div className="stat-value">{stats.total}</div>
+              <div className="stat-value">{stats?.total}</div>
             </div>
           </Col>
           <Col md={3}>
@@ -44,13 +44,13 @@ export const BatchStats: React.FC<BatchStatsProps> = ({ stats }) => {
           <Col md={3}>
             <div className="stat-card">
               <div className="stat-title">Failed Runs</div>
-              <div className="stat-value text-danger">{stats.failed}</div>
+              <div className="stat-value text-danger">{stats?.failed}</div>
             </div>
           </Col>
           <Col md={3}>
             <div className="stat-card">
               <div className="stat-title">Avg. Execution Time</div>
-              <div className="stat-value">{formatDuration(stats.averageExecutionTime)}</div>
+              <div className="stat-value">{formatDuration(stats?.averageExecutionTime)}</div>
             </div>
           </Col>
         </Row>

@@ -1,39 +1,39 @@
 import path from 'path';
 import dotenv from 'dotenv';
 
-// .env 파일 로드
-dotenv.config();
+// 프로젝트 루트의 .env 파일 로드
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
+// 프로젝트 루트 기준으로 data 디렉토리 설정
+const rootDir = path.resolve(__dirname, '../..');
+const dataDir = path.join(rootDir, process.env.DATABASE_PATH || 'data');
 
 const config = {
-  env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT || '3001', 10),
-  
-  // 데이터베이스 설정
-  db: {
-    path: process.env.DB_PATH || './data',
-    getDbPath: (name: string) => path.join(process.env.DB_PATH || './data', `${name}.db`),
+  database: {
+    path: dataDir
   },
-  
-  // 배치 설정
   batch: {
-    maxConcurrent: parseInt(process.env.MAX_CONCURRENT_BATCHES || '5', 10),
-    maxRetries: parseInt(process.env.MAX_BATCH_RETRIES || '3', 10),
-    retryDelay: parseInt(process.env.BATCH_RETRY_DELAY || '60000', 10), // 1분
-    maxRandomDelay: parseInt(process.env.MAX_RANDOM_DELAY || '1800000', 10), // 30분
+    maxConcurrent: 5,
+    maxRetries: 3,
+    timeout: 30 * 60 * 1000, // 30분으로 늘림
+    defaultRandomDelay: {
+      min: 1000,  // 1초
+      max: 5 * 60 * 1000  // 5분
+    }
   },
-
-  // Playwright 설정
   playwright: {
-    browser: process.env.PLAYWRIGHT_BROWSER || 'chromium',
-    headless: process.env.PLAYWRIGHT_HEADLESS !== 'false',
-    timeout: parseInt(process.env.PLAYWRIGHT_TIMEOUT || '30000', 10), // 30초
-  },
-  
-  // 로깅 설정
-  logging: {
-    level: process.env.LOG_LEVEL || 'info',
-    file: process.env.LOG_FILE || 'batch-service.log',
-  },
+    headless: false,
+    channel: 'chrome',
+    args: [
+      '--start-maximized',
+      '--no-sandbox',
+      '--disable-dev-shm-usage'
+    ],
+    // 브라우저 종료 방지
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false
+  }
 };
 
 export default config;

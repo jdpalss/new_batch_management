@@ -1,22 +1,54 @@
-import { format, formatDistance } from 'date-fns';
+export function formatDateTime(date: Date): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(date);
+}
 
-export const formatDate = (date: Date | string) => {
-  const d = new Date(date);
-  return format(d, 'yyyy-MM-dd');
-};
+export function formatDate(date: Date): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
 
-export const formatDateTime = (date: Date | string) => {
-  const d = new Date(date);
-  return format(d, 'yyyy-MM-dd HH:mm:ss');
-};
+export function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(date);
+}
 
-export const formatRelativeTime = (date: Date | string) => {
-  const d = new Date(date);
-  return formatDistance(d, new Date(), { addSuffix: true });
-};
-
-export const getLocalISOString = (date: Date) => {
-  const offset = date.getTimezoneOffset() * 60000;
-  const localISOTime = (new Date(date.getTime() - offset)).toISOString();
-  return localISOTime.slice(0, 16); // Remove seconds and milliseconds
-};
+export function getRelativeTime(date: Date): string {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) {
+    return '방금 전';
+  }
+  
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) {
+    return `${diffInMinutes}분 전`;
+  }
+  
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) {
+    return `${diffInHours}시간 전`;
+  }
+  
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) {
+    return `${diffInDays}일 전`;
+  }
+  
+  return formatDateTime(date);
+}

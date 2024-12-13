@@ -1,4 +1,17 @@
-import { Page } from 'playwright';
+export enum BatchStatus {
+  PENDING = 'PENDING',
+  RUNNING = 'RUNNING',
+  SUCCESS = 'SUCCESS',
+  FAILURE = 'FAILURE',
+  STOPPED = 'STOPPED'
+}
+
+export interface ScheduleConfig {
+  type: 'periodic' | 'specific';
+  cronExpression?: string;
+  executionDates?: string[];
+  randomDelay?: boolean;
+}
 
 export interface BatchConfig {
   id: string;
@@ -6,49 +19,43 @@ export interface BatchConfig {
   description?: string;
   templateId: string;
   datasetId: string;
-  script: string;
   isActive: boolean;
   schedule: ScheduleConfig;
+  status?: BatchStatus;
+  lastExecutedAt?: Date;
+  nextExecutionAt?: Date;
+  lastExecutionResult?: any;
   createdAt: Date;
   updatedAt: Date;
-  lastRun?: Date;
-  nextRun?: Date;
-}
-
-export interface ScheduleConfig {
-  type: 'periodic' | 'specific';
-  cronExpression?: string;
-  executionDates?: Date[];
-  randomDelay?: number;  // milliseconds
-}
-
-export interface BatchContext {
-  page: Page;
-  data: any;
-  log: (message: string, metadata?: any) => void;
-  error: (message: string, error?: Error) => void;
+  batch?: {
+    maxRetries?: number;
+    maxRandomDelay?: number;
+  };
+  defaultRandomDelay?: {
+    min: number;
+    max: number;
+  };
 }
 
 export interface BatchResult {
   id: string;
   batchId: string;
   status: BatchStatus;
-  executionTime: number;
+  startTime: Date;
+  endTime?: Date;
+  executionTime?: number;
   error?: string;
-  timestamp: Date;
-  logs: BatchLogEntry[];
+  success: boolean;
+  data?: any;
 }
 
-export enum BatchStatus {
-  SUCCESS = 'success',
-  FAILURE = 'failure',
-  RUNNING = 'running',
-  STOPPED = 'stopped'
-}
-
-export interface BatchLogEntry {
-  timestamp: Date;
-  level: 'info' | 'error' | 'warn';
-  message: string;
-  metadata?: Record<string, any>;
+export interface BatchExecution {
+  id: string;
+  batchId: string;
+  status: BatchStatus;
+  startTime: Date;
+  endTime?: Date;
+  executionTime?: number;
+  error?: string;
+  logs: string[];
 }

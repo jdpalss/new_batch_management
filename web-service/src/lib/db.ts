@@ -1,37 +1,37 @@
 import Datastore from 'nedb';
 import path from 'path';
+import config from '../config';
 
 interface Stores {
   batches: Datastore;
   templates: Datastore;
   datasets: Datastore;
-  batchExecutions: Datastore;
+  batchResults: Datastore;
   batchLogs: Datastore;
 }
 
-// DB 파일 경로
-const DATA_DIR = process.env.DATABASE_PATH || path.join(process.cwd(), 'data');
+const dataDir = process.env.DATABASE_PATH || './data';
 
 // DB 인스턴스 생성
 export const stores: Stores = {
   batches: new Datastore({ 
-    filename: path.join(DATA_DIR, 'batches.db'),
+    filename: path.join(dataDir, 'batches.db'),
     autoload: true 
   }),
   templates: new Datastore({ 
-    filename: path.join(DATA_DIR, 'templates.db'),
+    filename: path.join(dataDir, 'templates.db'),
     autoload: true 
   }),
   datasets: new Datastore({ 
-    filename: path.join(DATA_DIR, 'datasets.db'),
+    filename: path.join(dataDir, 'datasets.db'),
     autoload: true 
   }),
-  batchExecutions: new Datastore({ 
-    filename: path.join(DATA_DIR, 'batch-executions.db'),
+  batchResults: new Datastore({ 
+    filename: path.join(dataDir, 'batch-results.db'),
     autoload: true 
   }),
   batchLogs: new Datastore({ 
-    filename: path.join(DATA_DIR, 'batch-logs.db'),
+    filename: path.join(dataDir, 'batch-logs.db'),
     autoload: true 
   })
 };
@@ -44,8 +44,12 @@ export async function initializeDB() {
       stores.batches.ensureIndex({ fieldName: 'id', unique: true });
       stores.templates.ensureIndex({ fieldName: 'id', unique: true });
       stores.datasets.ensureIndex({ fieldName: 'id', unique: true });
-      stores.batchExecutions.ensureIndex({ fieldName: 'id', unique: true });
+      stores.batchResults.ensureIndex({ fieldName: 'id', unique: true });
       stores.batchLogs.ensureIndex({ fieldName: 'id', unique: true });
+
+      // batchResults와 batchLogs에 추가 인덱스 생성
+      stores.batchResults.ensureIndex({ fieldName: 'batchId' });
+      stores.batchLogs.ensureIndex({ fieldName: 'batchId' });
 
       resolve(true);
     } catch (error) {

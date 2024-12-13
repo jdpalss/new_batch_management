@@ -1,13 +1,16 @@
-import { DataStore } from 'nedb-promises';
+import Datastore from 'nedb-promises';
+import path from 'path';
 import { Logger } from '../utils/logger';
 
 export class DatasetService {
-  private db: DataStore;
+  private db: Datastore;
   private logger: Logger;
 
   constructor(dbPath: string, logger: Logger) {
-    this.db = DataStore.create({
-      filename: `${dbPath}/datasets.db`,
+    // 절대 경로로 변환
+    const dbFilePath = path.resolve(dbPath, 'datasets.db');
+    this.db = Datastore.create({
+      filename: dbFilePath,
       autoload: true
     });
     this.logger = logger;

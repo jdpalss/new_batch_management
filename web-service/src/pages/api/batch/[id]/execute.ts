@@ -4,7 +4,7 @@ import { BatchExecutionService } from '../../../../services/batchExecutionServic
 import { Logger } from '../../../../utils/logger';
 
 const logger = new Logger();
-const batchService = new BatchService(process.env.DATABASE_PATH || './data', logger);
+const batchService = new BatchService(process.env.DATABASE_PATH || './../data', logger);
 const executionService = new BatchExecutionService(logger);
 
 export default async function handler(

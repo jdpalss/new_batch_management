@@ -4,7 +4,7 @@ import { DatasetService } from '../../../services/datasetService';
 import { Logger } from '../../../utils/logger';
 
 const logger = new Logger();
-const datasetService = new DatasetService(process.env.DATABASE_PATH || './data', logger);
+const datasetService = new DatasetService(process.env.DATABASE_PATH || './../data', logger);
 const executionService = new BatchExecutionService(logger);
 
 export default async function handler(

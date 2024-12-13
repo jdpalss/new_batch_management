@@ -1,146 +1,136 @@
-import React from 'react';
 import { useRouter } from 'next/router';
+import { useEffect } from 'react';
+import { Container } from 'reactstrap';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
-import { Row, Col, Card, CardBody, Nav, NavItem, NavLink } from 'reactstrap';
-import { BatchConfig, BatchResult } from '../../types/batch';
-import { Template } from '../../types/template';
-import { Dataset } from '../../types/dataset';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { PageHeader } from '../../components/common/PageHeader';
 import { BatchDetails } from '../../components/batch/BatchDetails';
 import { BatchHistory } from '../../components/batch/BatchHistory';
+import { BatchLogs } from '../../components/batch/BatchLogs';
 import { BatchStats } from '../../components/batch/BatchStats';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { PageHeader } from '../../components/common/PageHeader';
+import { useToasts } from '../../hooks/useToasts';
+import { BatchService, TemplateService, DatasetService } from '../../services/api';
 
-enum TabType {
-  DETAILS = 'details',
-  HISTORY = 'history',
-  LOGS = 'logs'
-}
-
-export default function BatchDetailsPage() {
+export default function BatchDetailPage() {
   const router = useRouter();
+  const toasts = useToasts();
   const { id } = router.query;
-  const [activeTab, setActiveTab] = React.useState<TabType>(TabType.DETAILS);
 
-  const { data: batch, isLoading: isLoadingBatch } = useQuery<BatchConfig>({
+  // 라우터 준비 체크
+  useEffect(() => {
+    if (router.isReady && !id) {
+      router.replace('/batch').catch(console.error);
+    }
+  }, [router.isReady, id]);
+
+  // 배치 정보 조회
+  const { data: batch, isLoading: batchLoading, error: batchError } = useQuery({
     queryKey: ['batch', id],
-    queryFn: async () => {
-      const response = await axios.get(`/api/batch/${id}`);
-      return response.data;
-    },
-    enabled: !!id
+    queryFn: () => BatchService.get(id as string),
+    enabled: Boolean(id),
+    retry: false
   });
 
-  const { data: template, isLoading: isLoadingTemplate } = useQuery<Template>({
+  // 연관 템플릿 조회
+  const { data: template, isLoading: templateLoading } = useQuery({
     queryKey: ['template', batch?.templateId],
-    queryFn: async () => {
-      const response = await axios.get(`/api/template/${batch?.templateId}`);
-      return response.data;
-    },
-    enabled: !!batch?.templateId
+    queryFn: () => TemplateService.get(batch!.templateId),
+    enabled: Boolean(batch?.templateId),
+    retry: false,
+    onError: (error: Error) => {
+      toasts.addToast({
+        type: 'error',
+        title: '템플릿 로딩 실패',
+        message: error.message
+      });
+    }
   });
 
-  const { data: dataset, isLoading: isLoadingDataset } = useQuery<Dataset>({
+  // 연관 데이터셋 조회
+  const { data: dataset, isLoading: datasetLoading } = useQuery({
     queryKey: ['dataset', batch?.datasetId],
-    queryFn: async () => {
-      const response = await axios.get(`/api/dataset/${batch?.datasetId}`);
-      return response.data;
-    },
-    enabled: !!batch?.datasetId
+    queryFn: () => DatasetService.get(batch!.datasetId),
+    enabled: Boolean(batch?.datasetId),
+    retry: false,
+    onError: (error: Error) => {
+      toasts.addToast({
+        type: 'error',
+        title: '데이터셋 로딩 실패',
+        message: error.message
+      });
+    }
   });
 
-  const { data: history, isLoading: isLoadingHistory } = useQuery<BatchResult[]>({
-    queryKey: ['batchHistory', id],
-    queryFn: async () => {
-      const response = await axios.get(`/api/batch/${id}/history`);
-      return response.data;
-    },
-    enabled: !!id && activeTab === TabType.HISTORY
-  });
-
-  const { data: stats } = useQuery({
-    queryKey: ['batchStats', id],
-    queryFn: async () => {
-      const response = await axios.get(`/api/batch/${id}/stats`);
-      return response.data;
-    },
-    enabled: !!id
-  });
-
-  if (isLoadingBatch || isLoadingTemplate || isLoadingDataset) {
-    return <LoadingSpinner />;
+  // 로딩 중이거나 라우터가 준비되지 않은 경우
+  if (!router.isReady || batchLoading || templateLoading || datasetLoading) {
+    return (
+      <Container>
+        <LoadingSpinner />
+      </Container>
+    );
   }
 
-  if (!batch || !template || !dataset) {
-    return <div>Batch, template or dataset not found</div>;
+  // 배치를 찾을 수 없는 경우
+  if (batchError) {
+    return (
+      <Container>
+        <div className="text-center mt-5">
+          <h3>배치를 찾을 수 없습니다.</h3>
+          <p className="text-muted">{batchError.message}</p>
+          <button 
+            className="btn btn-primary mt-3"
+            onClick={() => router.replace('/batch').catch(console.error)}
+          >
+            목록으로 돌아가기
+          </button>
+        </div>
+      </Container>
+    );
+  }
+
+  // 데이터가 없는 경우
+  if (!batch) {
+    return (
+      <Container>
+        <div className="text-center mt-5">
+          <h3>배치 정보를 불러올 수 없습니다.</h3>
+          <button 
+            className="btn btn-primary mt-3"
+            onClick={() => router.replace('/batch').catch(console.error)}
+          >
+            목록으로 돌아가기
+          </button>
+        </div>
+      </Container>
+    );
   }
 
   return (
-    <div>
-      <PageHeader title={batch.title} description={batch.description} />
+    <Container>
+      <PageHeader
+        title={batch.title}
+        subtitle={batch.description}
+        breadcrumbs={[
+          { text: '홈', href: '/' },
+          { text: '배치 관리', href: '/batch' },
+          { text: batch.title }
+        ]}
+      />
 
-      <Row className="mb-4">
-        <Col md={12}>
-          <BatchStats stats={stats} />
-        </Col>
-      </Row>
-
-      <Card>
-        <CardBody>
-          <Nav tabs className="mb-4">
-            <NavItem>
-              <NavLink
-                active={activeTab === TabType.DETAILS}
-                onClick={() => setActiveTab(TabType.DETAILS)}
-                style={{ cursor: 'pointer' }}
-              >
-                Details
-              </NavLink>
-            </NavItem>
-            <NavItem>
-              <NavLink
-                active={activeTab === TabType.HISTORY}
-                onClick={() => setActiveTab(TabType.HISTORY)}
-                style={{ cursor: 'pointer' }}
-              >
-                Execution History
-              </NavLink>
-            </NavItem>
-            <NavItem>
-              <NavLink
-                active={activeTab === TabType.LOGS}
-                onClick={() => setActiveTab(TabType.LOGS)}
-                style={{ cursor: 'pointer' }}
-              >
-                Logs
-              </NavLink>
-            </NavItem>
-          </Nav>
-
-          {activeTab === TabType.DETAILS && (
-            <BatchDetails
-              batch={batch}
-              template={template}
-              dataset={dataset}
-            />
-          )}
-
-          {activeTab === TabType.HISTORY && (
-            <BatchHistory
-              results={history || []}
-              isLoading={isLoadingHistory}
-            />
-          )}
-
-          {activeTab === TabType.LOGS && (
-            <div>
-              {/* TODO: Implement logs viewer */}
-              Logs viewer coming soon...
-            </div>
-          )}
-        </CardBody>
-      </Card>
-    </div>
+      <div className="row">
+        <div className="col-md-8">
+          <BatchDetails
+            batch={batch}
+            template={template}
+            dataset={dataset}
+          />
+          <BatchHistory batchId={id as string} />
+          <BatchLogs batchId={id as string} />
+        </div>
+        <div className="col-md-4">
+          <BatchStats batchId={id as string} />
+        </div>
+      </div>
+    </Container>
   );
 }

@@ -29,7 +29,7 @@ export class BatchExecutionService {
   private async initBrowser(): Promise<Browser> {
     if (!this.browser) {
       this.browser = await chromium.launch({
-        headless: true,
+        headless: false,
         args: ['--no-sandbox', '--disable-dev-shm-usage']
       });
     }
