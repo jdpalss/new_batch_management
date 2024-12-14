@@ -4,7 +4,7 @@ import { BatchQueueManager } from './BatchQueueManager';
 import { DatasetService } from '../services/datasetService';
 import { Logger } from '../utils/logger';
 import { loadBatches } from '../models/batch';
-import { BatchConfig, BatchStatus } from '../types/batch';
+import { BatchConfig } from '../types/batch';
 import config from '../config';
 
 export class BatchScheduler {
@@ -26,8 +26,22 @@ export class BatchScheduler {
     this.logger = logger;
     this.queueManager = new BatchQueueManager(logger, datasetService, maxConcurrent);
 
-    // BatchQueueManager에 실제 실행 함수 설정
-    this.queueManager['executeBatch'] = this.executeBatchWithDelay.bind(this);
+    // BatchQueueManager에 실행 함수 설정
+    this.queueManager.setExecuteBatchFunction(async (batch: BatchConfig, data: any) => {
+      try {
+        // 랜덤 지연 적용 (필요한 경우)
+        if (batch.schedule.randomDelay) {
+          const delay = Math.floor(Math.random() * (5 * 60 * 1000)); // 0-5분
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        // 배치 실행
+        return await this.batchExecutor.executeBatch(batch, data);
+      } catch (error) {
+        this.logger.error(`Error executing batch ${batch.id}:`, error);
+        throw error;
+      }
+    });
   }
 
   async loadExistingBatches(): Promise<void> {
@@ -58,9 +72,8 @@ export class BatchScheduler {
 
     if (config.schedule.type === 'periodic' && config.schedule.cronExpression) {
       const task = schedule(config.schedule.cronExpression, async () => {
-        // 배치를 큐에 추가
         await this.queueManager.addToQueue(config)
-          .catch(error => this.logger.error(`Failed to execute batch ${config.id}`, error));
+          .catch(error => this.logger.error(`Failed to queue batch ${config.id}`, error));
       });
       tasks.push(task);
       
@@ -76,6 +89,7 @@ export class BatchScheduler {
 
     if (tasks.length > 0) {
       this.activeTasks.set(config.id, tasks);
+      this.logger.info(`Scheduled batch ${config.id} with ${tasks.length} execution(s)`);
     }
   }
 
@@ -87,21 +101,12 @@ export class BatchScheduler {
 
     const timeoutId = setTimeout(async () => {
       await this.queueManager.addToQueue(config)
-        .catch(error => this.logger.error(`Failed to execute batch ${config.id}`, error));
+        .catch(error => this.logger.error(`Failed to queue batch ${config.id}`, error));
     }, delay);
 
     return {
       stop: () => clearTimeout(timeoutId)
     } as ScheduledTask;
-  }
-
-  private async executeBatchWithDelay(config: BatchConfig): Promise<any> {
-    if (config.schedule.randomDelay) {
-      const delay = Math.floor(Math.random() * (5 * 60 * 1000)); // 0-5분 랜덤 지연
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-
-    return await this.batchExecutor.executeBatch(config, null); // 데이터는 실행 시점에 로드
   }
 
   async stopBatch(batchId: string): Promise<void> {
