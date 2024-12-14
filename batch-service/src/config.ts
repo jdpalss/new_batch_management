@@ -13,9 +13,10 @@ const config = {
     path: dataDir
   },
   batch: {
-    maxConcurrent: 5,
+    maxConcurrent: Number(process.env.MAX_CONCURRENT_JOBS) || 5,
     maxRetries: 3,
-    timeout: 30 * 60 * 1000, // 30분으로 늘림
+    timeout: 30 * 60 * 1000, // 30분
+    maxQueueSize: 1000, // 최대 큐 크기
     defaultRandomDelay: {
       min: 1000,  // 1초
       max: 5 * 60 * 1000  // 5분
@@ -29,7 +30,6 @@ const config = {
       '--no-sandbox',
       '--disable-dev-shm-usage'
     ],
-    // 브라우저 종료 방지
     handleSIGINT: false,
     handleSIGTERM: false,
     handleSIGHUP: false
