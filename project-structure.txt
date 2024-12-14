@@ -18,19 +18,22 @@
 │   │       └── logger.ts
 │   └── tsconfig.json
 ├── data
+│   ├── batch-executions.db
 │   ├── batch-logs.db
 │   ├── batch-results.db
 │   ├── batches.db
 │   ├── datasets.db
-│   └── templates.db
+│   ├── screenshots
+│   ├── templates.db
+│   └── videos
 ├── package.json
 ├── project-structure.txt
 ├── tsconfig.json
 ├── web-service
-│   ├── data
-│   │   ├── batches.db
-│   │   ├── datasets.db
-│   │   └── templates.db
+│   ├── logs
+│   │   ├── batch-2024-12-14.log
+│   │   ├── combined-2024-12-14.log
+│   │   └── error-2024-12-14.log
 │   ├── next-env.d.ts
 │   ├── next.config.js
 │   ├── package.json
@@ -42,6 +45,7 @@
 │   │   │   │   ├── BatchHistory.tsx
 │   │   │   │   ├── BatchList.tsx
 │   │   │   │   ├── BatchLogs.tsx
+│   │   │   │   ├── BatchMonitor.tsx
 │   │   │   │   ├── BatchResultModal.tsx
 │   │   │   │   ├── BatchScriptEditor.tsx
 │   │   │   │   ├── BatchStats.tsx
@@ -71,6 +75,7 @@
 │   │   │       ├── TemplateField.tsx
 │   │   │       ├── TemplateForm.tsx
 │   │   │       └── TemplateList.tsx
+│   │   ├── config.ts
 │   │   ├── constants
 │   │   │   ├── fieldTypes.ts
 │   │   │   └── index.ts
@@ -87,7 +92,9 @@
 │   │   │   ├── api
 │   │   │   │   ├── batch
 │   │   │   │   │   ├── [id]
-│   │   │   │   │   │   └── execute.ts
+│   │   │   │   │   │   ├── execute.ts
+│   │   │   │   │   │   ├── history.ts
+│   │   │   │   │   │   └── logs.ts
 │   │   │   │   │   ├── [id].ts
 │   │   │   │   │   ├── index.ts
 │   │   │   │   │   └── test.ts
@@ -125,6 +132,7 @@
 │   │   ├── services
 │   │   │   ├── api.ts
 │   │   │   ├── batchExecutionService.ts
+│   │   │   ├── batchRecoveryService.ts
 │   │   │   ├── batchService.ts
 │   │   │   ├── config.ts
 │   │   │   ├── datasetService.ts
@@ -155,4 +163,4 @@
 │   └── tsconfig.json
 └── yarn.lock
 
-41 directories, 115 files
+43 directories, 121 files
