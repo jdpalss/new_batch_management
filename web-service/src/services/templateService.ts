@@ -1,125 +1,108 @@
-import { stores } from '../lib/db';
-import { Template, TemplateValidationError } from '../types/template';
+import { 
+  TemplateService as ITemplateService, 
+  Template, 
+  Dataset,
+  BaseServiceConfig 
+} from '@batch-automation/shared';
+import { collections } from '../lib/db-client';
 import { Logger } from '../utils/logger';
-import { TemplateValidator } from '../utils/validation';
 
-export class TemplateService {
-  constructor(private readonly logger: Logger) {}
+export class TemplateService implements ITemplateService {
+  private logger: Logger;
 
-  async createTemplate(template: Omit<Template, 'id' | 'createdAt' | 'updatedAt' | 'version'>): Promise<Template> {
+  constructor(config: BaseServiceConfig = {}) {
+    this.logger = config.logger || new Logger();
+  }
+
+  async create(data: Omit<Template, 'id' | 'createdAt' | 'updatedAt'>): Promise<Template> {
     try {
-      // Validate fields
-      const fieldErrors = TemplateValidator.validateFields(template.fields);
-      if (fieldErrors.length > 0) {
-        throw new Error(`Invalid template fields: ${fieldErrors.map(e => e.message).join(', ')}`);
-      }
-
-      // Validate script
-      const scriptErrors = TemplateValidator.validateScript(template.script);
-      if (scriptErrors.length > 0) {
-        throw new Error(`Invalid script: ${scriptErrors.map(e => e.message).join(', ')}`);
-      }
-
-      const newTemplate: Template = {
-        id: Date.now().toString(),
-        ...template,
-        version: 1,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      await stores.templates.insert(newTemplate);
-      this.logger.info(`Created template ${newTemplate.id}`);
-      
-      return newTemplate;
+      await this.validateTemplate(data);
+      const template = await collections.templates.insert(data);
+      this.logger.info(`Created template: ${template.id}`);
+      return template;
     } catch (error) {
       this.logger.error('Failed to create template:', error);
       throw error;
     }
   }
 
-  async updateTemplate(id: string, template: Partial<Template>): Promise<Template> {
+  async update(id: string, data: Partial<Template>): Promise<Template> {
     try {
-      const existingTemplate = await this.getTemplate(id);
-
-      // Validate fields if provided
-      if (template.fields) {
-        const fieldErrors = TemplateValidator.validateFields(template.fields);
-        if (fieldErrors.length > 0) {
-          throw new Error(`Invalid template fields: ${fieldErrors.map(e => e.message).join(', ')}`);
-        }
-      }
-
-      // Validate script if provided
-      if (template.script) {
-        const scriptErrors = TemplateValidator.validateScript(template.script);
-        if (scriptErrors.length > 0) {
-          throw new Error(`Invalid script: ${scriptErrors.map(e => e.message).join(', ')}`);
-        }
-      }
-
-      const updatedTemplate: Template = {
-        ...existingTemplate,
-        ...template,
-        version: existingTemplate.version + 1,
-        updatedAt: new Date()
-      };
-
-      await stores.templates.update({ id }, updatedTemplate, { returnUpdatedDocs: true });
-      this.logger.info(`Updated template ${id} to version ${updatedTemplate.version}`);
+      const template = await collections.templates.update({ id }, data);
+      if (!template) throw new Error(`Template not found: ${id}`);
       
-      return updatedTemplate;
+      this.logger.info(`Updated template: ${id}`);
+      return template;
     } catch (error) {
       this.logger.error(`Failed to update template ${id}:`, error);
       throw error;
     }
   }
 
-  async getTemplate(id: string): Promise<Template> {
-    const template = await stores.templates.findOne({ id });
-    if (!template) {
-      throw new Error(`Template ${id} not found`);
-    }
-    return template;
-  }
-
-  async listTemplates(): Promise<Template[]> {
+  async delete(id: string): Promise<void> {
     try {
-      const templates = await stores.templates.find({});
-      return templates.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    } catch (error) {
-      this.logger.error('Failed to list templates:', error);
-      throw error;
-    }
-  }
-
-  async deleteTemplate(id: string): Promise<void> {
-    try {
-      // Check if template is in use
-      const datasetExists = await stores.datasets.findOne({ templateId: id });
-      if (datasetExists) {
-        throw new Error('Cannot delete template that is in use by datasets');
+      // 템플릿을 사용하는 데이터셋이 있는지 확인
+      const datasets = await collections.datasets.find({ templateId: id });
+      if (datasets.length > 0) {
+        throw new Error('Cannot delete template with existing datasets');
       }
 
-      const batchExists = await stores.batches.findOne({ templateId: id });
-      if (batchExists) {
-        throw new Error('Cannot delete template that is in use by batches');
-      }
-
-      await stores.templates.remove({ id });
-      this.logger.info(`Deleted template ${id}`);
+      await collections.templates.remove({ id });
+      this.logger.info(`Deleted template: ${id}`);
     } catch (error) {
       this.logger.error(`Failed to delete template ${id}:`, error);
       throw error;
     }
   }
 
-  async validateTemplateData(templateId: string, data: Record<string, any>): Promise<TemplateValidationError[]> {
+  async findById(id: string): Promise<Template | null> {
+    return await collections.templates.findOne({ id });
+  }
+
+  async findAll(query: Partial<Template> = {}): Promise<Template[]> {
+    return await collections.templates.find(query);
+  }
+
+  async validateTemplate(template: Partial<Template>): Promise<void> {
+    if (!template.name?.trim()) {
+      throw new Error('Template name is required');
+    }
+
+    if (!Array.isArray(template.fields) || template.fields.length === 0) {
+      throw new Error('Template must have at least one field');
+    }
+
+    // 필드 유효성 검사
+    for (const field of template.fields) {
+      if (!field.name?.trim()) {
+        throw new Error('Field name is required');
+      }
+      if (!field.type?.trim()) {
+        throw new Error('Field type is required');
+      }
+
+      // 옵션이 필요한 필드 타입 검사
+      if (['select', 'radio', 'checkbox'].includes(field.type)) {
+        if (!Array.isArray(field.options) || field.options.length === 0) {
+          throw new Error(`Field "${field.name}" requires at least one option`);
+        }
+      }
+    }
+  }
+
+  async getTemplateWithDatasets(id: string): Promise<{
+    template: Template;
+    datasets: Dataset[];
+  }> {
     try {
-      const template = await this.getTemplate(templateId);
-      return TemplateValidator.validateFields(template.fields);
+      const template = await this.findById(id);
+      if (!template) throw new Error(`Template not found: ${id}`);
+
+      const datasets = await collections.datasets.find({ templateId: id });
+
+      return { template, datasets };
     } catch (error) {
-      this.logger.error(`Failed to validate template data for ${templateId}:`, error);
+      this.logger.error(`Failed to get template with datasets ${id}:`, error);
       throw error;
     }
   }

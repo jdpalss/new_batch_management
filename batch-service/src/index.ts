@@ -1,52 +1,59 @@
-import fs from 'fs';
-import config from './config';
+import 'dotenv/config';
 import { BatchExecutor } from './batch/BatchExecutor';
 import { BatchScheduler } from './batch/BatchScheduler';
 import { DatasetService } from './services/datasetService';
 import { Logger } from './utils/logger';
 
+// 서비스 인스턴스
 const logger = new Logger();
-
-// 데이터 디렉토리가 없으면 생성
-if (!fs.existsSync(config.database.path)) {
-  fs.mkdirSync(config.database.path, { recursive: true });
-  logger.info(`Created database directory: ${config.database.path}`);
-}
-
+const datasetService = new DatasetService({ logger });
 const batchExecutor = new BatchExecutor(logger);
-const datasetService = new DatasetService(config.database.path, logger);
 const batchScheduler = new BatchScheduler(batchExecutor, datasetService, logger);
 
-async function start() {
+// 이전 실행 중이던 프로세스 정리
+let isShuttingDown = false;
+async function cleanup() {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  logger.info('Cleaning up and shutting down...');
   try {
-    logger.info('Starting batch service...', { dbPath: config.database.path });
-    
-    // Initialize Playwright browser
-    await batchExecutor.initialize();
-    
-    // Load and schedule existing batches
-    await batchScheduler.loadExistingBatches();
-    
-    logger.info('Batch service started successfully');
+    await batchScheduler.shutdown();
+    await batchExecutor.shutdown();
+    logger.info('Cleanup completed');
+    process.exit(0);
   } catch (error) {
-    logger.error('Failed to start batch service', error);
+    logger.error('Error during cleanup:', error);
     process.exit(1);
   }
 }
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('Shutting down batch service...');
-  await batchScheduler.stopAllBatches();
-  await batchExecutor.shutdown();
-  process.exit(0);
+// 종료 시그널 처리
+process.on('SIGTERM', cleanup);
+process.on('SIGINT', cleanup);
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception:', error);
+  cleanup();
 });
 
-process.on('SIGINT', async () => {
-  logger.info('Shutting down batch service...');
-  await batchScheduler.stopAllBatches();
-  await batchExecutor.shutdown();
-  process.exit(0);
-});
+// 서비스 시작
+async function start() {
+  try {
+    logger.info('Starting batch service...');
+    
+    // 서비스 초기화
+    await datasetService.initialize();
+    await batchExecutor.initialize();
+    
+    // 배치 스케줄러 시작 (10초 간격으로 체크)
+    await batchScheduler.startPeriodicCheck(10);
+    
+    logger.info('Batch service started successfully');
+  } catch (error) {
+    logger.error('Failed to start batch service:', error);
+    await cleanup();
+  }
+}
 
+// 시작
 start();

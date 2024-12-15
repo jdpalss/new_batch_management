@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRouter } from 'next/router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
   Button,
@@ -22,6 +22,7 @@ import { useToasts } from '../../hooks/useToasts';
 export default function BatchListPage() {
   const router = useRouter();
   const { addToast } = useToasts();
+  const queryClient = useQueryClient();
 
   const { data: batches, isLoading } = useQuery<BatchConfig[]>({
     queryKey: ['batches'],
@@ -41,6 +42,12 @@ export default function BatchListPage() {
         type: 'success',
         message: `Batch ${variables.isActive ? 'activated' : 'deactivated'} successfully`
       });
+      queryClient.invalidateQueries({ 
+        queryKey: ['batches']
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['batch', variables.id]
+      });
     },
     onError: (error) => {
       addToast({
@@ -55,10 +62,17 @@ export default function BatchListPage() {
       const response = await axios.post(`/api/batch/${id}/execute`);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       addToast({
         type: 'success',
         message: 'Batch execution started'
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['batches'],
+        exact: false 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['batch', variables]
       });
     },
     onError: (error) => {

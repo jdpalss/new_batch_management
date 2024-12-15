@@ -6,11 +6,13 @@ export enum BatchStatus {
   INACTIVE = 'INACTIVE'
 }
 
+export type ScheduleType = 'periodic' | 'specific';
+
 export interface BatchSchedule {
-  type: 'periodic' | 'specific';
+  type: ScheduleType;
   cronExpression?: string;
   executionDates?: string[];
-  randomDelay?: boolean;
+  useRandomDelay?: boolean;
   timezone?: string;
 }
 
@@ -24,7 +26,6 @@ export interface BatchConfig {
   isActive: boolean;
   script?: string;
   lastExecutedAt?: Date;
-  nextExecutionAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,18 +34,13 @@ export interface BatchResult {
   id: string;
   batchId: string;
   status: BatchStatus;
-  startTime: Date;         // 시작 시간
-  endTime: Date;           // 종료 시간
-  executionTime: number;   // 실행 시간 (밀리초)
+  startTime: Date;
+  endTime: Date;
+  executionTime: number;
   success: boolean;
-  data?: any;             // 실행 결과 데이터
-  error?: string;         // 오류 메시지
-  metadata?: {
-    scriptVersion?: string;
-    environment?: string;
-    errorStack?: string;
-    [key: string]: any;
-  };
+  data?: any;
+  error?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface BatchLog {
@@ -53,16 +49,8 @@ export interface BatchLog {
   executionId: string;
   level: 'info' | 'error' | 'warn';
   message: string;
-  timestamp: Date;
   metadata?: Record<string, any>;
-}
-
-export interface BatchStats {
-  totalExecutions: number;
-  successCount: number;
-  failureCount: number;
-  averageExecutionTime: number;
-  lastExecution?: BatchResult;
+  timestamp: Date;
 }
 
 export interface BatchWithDetails extends BatchConfig {
@@ -76,5 +64,5 @@ export interface BatchWithDetails extends BatchConfig {
   };
   lastRun?: Date;
   nextRun?: Date;
-  stats?: BatchStats;
+  status: BatchStatus;
 }

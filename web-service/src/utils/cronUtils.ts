@@ -1,127 +1,132 @@
-import * as cronParser from 'cron-parser';
+import { parseExpression } from 'cron-parser';
 
-export const cronValidator = {
-  isValidCron: (expression: string): boolean => {
-    try {
-      cronParser.parseExpression(expression);
-      return true;
-    } catch (error) {
-      return false;
-    }
-  },
-
-  getNextExecutionDates: (expression: string, count: number = 5): Date[] => {
-    try {
-      const interval = cronParser.parseExpression(expression);
-      const dates: Date[] = [];
-      
-      for (let i = 0; i < count; i++) {
-        dates.push(interval.next().toDate());
-      }
-      
-      return dates;
-    } catch (error) {
-      return [];
-    }
-  },
-
-  // Cron 표현식 도우미 함수들
-  presets: {
-    everyMinute: '* * * * *',
-    everyHour: '0 * * * *',
-    everyDay: '0 0 * * *',
-    everyWeek: '0 0 * * 0',
-    everyMonth: '0 0 1 * *',
-  },
-
-  // 사람이 읽기 쉬운 형태로 변환
-  humanizeExpression: (expression: string): string => {
+/**
+ * Cron 표현식을 사람이 읽기 쉬운 형태로 설명
+ */
+export const describeCronExpression = (expression: string): string => {
+  try {
     const parts = expression.split(' ');
-    if (parts.length !== 5) return '잘못된 Cron 표현식';
+    if (parts.length !== 5 && parts.length !== 6) {
+      return '유효하지 않은 Cron 표현식';
+    }
 
     const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
 
-    if (expression === cronValidator.presets.everyMinute) return '매분';
-    if (expression === cronValidator.presets.everyHour) return '매시 정각';
-    if (expression === cronValidator.presets.everyDay) return '매일 자정';
-    if (expression === cronValidator.presets.everyWeek) return '매주 일요일 자정';
-    if (expression === cronValidator.presets.everyMonth) return '매월 1일 자정';
+    const descriptions: string[] = [];
 
-    const descriptions = [];
-    
-    // 분 해석
-    if (minute === '*') descriptions.push('매분');
-    else if (minute.includes('/')) descriptions.push(`${minute.split('/')[1]}분 간격`);
-    else descriptions.push(`${minute}분`);
+    // 분 설명
+    if (minute === '*') {
+      descriptions.push('매분');
+    } else if (minute.includes('/')) {
+      const [, interval] = minute.split('/');
+      descriptions.push(`${interval}분 간격으로`);
+    } else {
+      descriptions.push(`${minute}분`);
+    }
 
-    // 시간 해석
-    if (hour === '*') descriptions.push('매시');
-    else descriptions.push(`${hour}시`);
+    // 시간 설명
+    if (hour === '*') {
+      descriptions.push('매시');
+    } else if (hour.includes('/')) {
+      const [, interval] = hour.split('/');
+      descriptions.push(`${interval}시간 간격으로`);
+    } else {
+      descriptions.push(`${hour}시`);
+    }
 
-    // 날짜 해석
-    if (dayOfMonth !== '*') descriptions.push(`${dayOfMonth}일`);
+    // 일 설명
+    if (dayOfMonth === '*') {
+      descriptions.push('매일');
+    } else {
+      descriptions.push(`${dayOfMonth}일`);
+    }
+
+    // 월 설명
+    if (month === '*') {
+      descriptions.push('매월');
+    } else {
+      const months = {
+        '1': '1월', '2': '2월', '3': '3월', '4': '4월',
+        '5': '5월', '6': '6월', '7': '7월', '8': '8월',
+        '9': '9월', '10': '10월', '11': '11월', '12': '12월'
+      };
+      descriptions.push(months[month as keyof typeof months] || month);
+    }
+
+    // 요일 설명
     if (dayOfWeek !== '*') {
-      const days = ['일', '월', '화', '수', '목', '금', '토'];
-      const dayNames = dayOfWeek.split(',').map(d => days[parseInt(d)]);
-      descriptions.push(`${dayNames.join(',')}요일`);
+      const days = {
+        '0': '일요일', '1': '월요일', '2': '화요일', '3': '수요일',
+        '4': '목요일', '5': '금요일', '6': '토요일',
+        'MON': '월요일', 'TUE': '화요일', 'WED': '수요일',
+        'THU': '목요일', 'FRI': '금요일', 'SAT': '토요일', 'SUN': '일요일'
+      };
+
+      if (dayOfWeek.includes('-')) {
+        const [start, end] = dayOfWeek.split('-');
+        descriptions.push(`${days[start as keyof typeof days]}부터 ${days[end as keyof typeof days]}까지`);
+      } else if (dayOfWeek.includes(',')) {
+        const selectedDays = dayOfWeek.split(',')
+          .map(d => days[d as keyof typeof days])
+          .join(', ');
+        descriptions.push(`${selectedDays}에`);
+      } else {
+        descriptions.push(days[dayOfWeek as keyof typeof days] || dayOfWeek);
+      }
     }
 
     return descriptions.join(' ');
-  }
-};
-
-export const validateCronExpression = (expression: string): { 
-  isValid: boolean; 
-  error?: string;
-  nextExecutions?: Date[];
-} => {
-  try {
-    if (!expression.trim()) {
-      return { isValid: false, error: 'Cron 표현식을 입력해주세요' };
-    }
-
-    const interval = cronParser.parseExpression(expression);
-    const nextExecutions = [];
-    
-    // 다음 5번의 실행 시간 계산
-    for (let i = 0; i < 5; i++) {
-      nextExecutions.push(interval.next().toDate());
-    }
-
-    return { 
-      isValid: true,
-      nextExecutions 
-    };
   } catch (error) {
-    return { 
-      isValid: false, 
-      error: '유효하지 않은 Cron 표현식입니다' 
-    };
+    return '유효하지 않은 Cron 표현식';
   }
 };
 
-export const getCronHelp = () => {
-  return {
-    format: '분 시 일 월 요일',
-    examples: [
-      { expression: '0 0 * * *', description: '매일 자정' },
-      { expression: '0 9 * * 1-5', description: '평일 오전 9시' },
-      { expression: '0 */2 * * *', description: '2시간 마다' },
-      { expression: '0 9-17 * * *', description: '매일 오전 9시부터 오후 5시까지 1시간 간격' },
-      { expression: '0 0 1,15 * *', description: '매월 1일과 15일 자정' }
-    ],
-    specialCharacters: [
-      { char: '*', description: '모든 값' },
-      { char: ',', description: '값 리스트 구분' },
-      { char: '-', description: '범위 지정' },
-      { char: '/', description: '간격 지정' }
-    ],
-    constraints: {
-      minutes: '0-59',
-      hours: '0-23',
-      dayOfMonth: '1-31',
-      month: '1-12',
-      dayOfWeek: '0-6 (0: 일요일)'
-    }
-  };
+/**
+ * Cron 표현식의 다음 실행 시간을 계산
+ */
+export const getNextExecutionTime = (cronExpression: string): Date | null => {
+  try {
+    const interval = parseExpression(cronExpression);
+    return interval.next().toDate();
+  } catch (error) {
+    return null;
+  }
+};
+
+/**
+ * 주어진 날짜가 Cron 표현식의 실행 시간과 일치하는지 확인
+ */
+export const matchesCronExpression = (cronExpression: string, date: Date): boolean => {
+  try {
+    const interval = parseExpression(cronExpression);
+    const prev = interval.prev().toDate();
+    const next = interval.next().toDate();
+    
+    return date >= prev && date <= next;
+  } catch (error) {
+    return false;
+  }
+};
+
+/**
+ * Cron 표현식이 유효한지 검증
+ */
+export const isValidCronExpression = (cronExpression: string): boolean => {
+  try {
+    parseExpression(cronExpression);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+// 자주 사용되는 Cron 표현식 템플릿
+export const CRON_TEMPLATES = {
+  EVERY_MINUTE: '* * * * *',
+  EVERY_HOUR: '0 * * * *',
+  EVERY_DAY_MIDNIGHT: '0 0 * * *',
+  EVERY_MONDAY: '0 0 * * 1',
+  EVERY_FIRST_DAY: '0 0 1 * *',
+  WEEKDAYS_9AM: '0 9 * * 1-5',
+  WEEKENDS_9AM: '0 9 * * 0,6'
 };

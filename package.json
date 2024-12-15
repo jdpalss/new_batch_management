@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
+    "shared",
     "web-service",
     "batch-service"
   ],
   "scripts": {
     "dev:web": "yarn workspace web-service dev",
     "dev:batch": "yarn workspace batch-service dev",
+    "build:shared": "yarn workspace shared build",
     "build:web": "yarn workspace web-service build",
     "build:batch": "yarn workspace batch-service build",
     "start:web": "yarn workspace web-service start",

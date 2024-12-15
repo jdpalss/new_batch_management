@@ -1,27 +1,26 @@
 import Datastore from 'nedb-promises';
 import path from 'path';
 import config from '../config';
-import { BatchConfig } from '../types/batch';
 
 // 배치 데이터베이스 초기화
 const batchStore = Datastore.create({
   filename: path.join(config.database.path, 'batches.db'),
-  autoload: true
+  autoload: true,
 });
 
-// 배치 목록 조회
-export async function loadBatches(): Promise<BatchConfig[]> {
+// 배치 목록 조회 (실행 가능한 배치만)
+export async function loadBatches(): Promise<any[]> {
   try {
-    return await batchStore.find({}) as BatchConfig[];
+    return await batchStore.find({ isActive: true });
   } catch (error) {
     throw new Error(`Failed to load batches: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
 // 특정 배치 조회
-export async function getBatch(id: string): Promise<BatchConfig | null> {
+export async function getBatch(id: string): Promise<any | null> {
   try {
-    return await batchStore.findOne({ id }) as BatchConfig | null;
+    return await batchStore.findOne({ id });
   } catch (error) {
     throw new Error(`Failed to get batch ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -39,35 +38,19 @@ export async function updateBatchStatus(id: string, status: string): Promise<voi
   }
 }
 
-// 배치 실행 이력 저장
-export async function saveBatchExecution(id: string, execution: any): Promise<void> {
+// 배치 실행 기록 업데이트
+export async function updateBatchExecution(id: string, lastExecutedAt: Date): Promise<void> {
   try {
-    const batch = await getBatch(id);
-    if (!batch) throw new Error(`Batch ${id} not found`);
-
     await batchStore.update(
       { id },
       { 
         $set: { 
-          lastExecutedAt: new Date(),
-          lastExecutionResult: execution,
+          lastExecutedAt,
           updatedAt: new Date()
         }
       }
     );
   } catch (error) {
-    throw new Error(`Failed to save batch execution ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-// 배치 활성화/비활성화
-export async function setBatchActive(id: string, isActive: boolean): Promise<void> {
-  try {
-    await batchStore.update(
-      { id },
-      { $set: { isActive, updatedAt: new Date() } }
-    );
-  } catch (error) {
-    throw new Error(`Failed to ${isActive ? 'activate' : 'deactivate'} batch ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(`Failed to update batch execution ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

@@ -1,138 +1,140 @@
 import { schedule, ScheduledTask } from 'node-cron';
 import { BatchExecutor } from './BatchExecutor';
-import { BatchQueueManager } from './BatchQueueManager';
-import { DatasetService } from '../services/datasetService';
+import { DatasetService } from '@batch-automation/shared';
 import { Logger } from '../utils/logger';
-import { loadBatches } from '../models/batch';
+import { BatchServiceDatabase } from '../lib/db-client';
 import { BatchConfig } from '../types/batch';
-import config from '../config';
+import * as cronParser from 'cron-parser';
 
 export class BatchScheduler {
   private activeTasks: Map<string, ScheduledTask[]>;
   private batchExecutor: BatchExecutor;
   private datasetService: DatasetService;
   private logger: Logger;
-  private queueManager: BatchQueueManager;
+  private db: BatchServiceDatabase;
 
   constructor(
-    batchExecutor: BatchExecutor, 
-    datasetService: DatasetService, 
-    logger: Logger,
-    maxConcurrent?: number
+    batchExecutor: BatchExecutor,
+    datasetService: DatasetService,
+    logger: Logger
   ) {
     this.activeTasks = new Map();
     this.batchExecutor = batchExecutor;
     this.datasetService = datasetService;
     this.logger = logger;
-    this.queueManager = new BatchQueueManager(logger, datasetService, maxConcurrent);
-
-    // BatchQueueManager에 실행 함수 설정
-    this.queueManager.setExecuteBatchFunction(async (batch: BatchConfig, data: any) => {
-      try {
-        // 랜덤 지연 적용 (필요한 경우)
-        if (batch.schedule.randomDelay) {
-          const delay = Math.floor(Math.random() * (5 * 60 * 1000)); // 0-5분
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-
-        // 배치 실행
-        return await this.batchExecutor.executeBatch(batch, data);
-      } catch (error) {
-        this.logger.error(`Error executing batch ${batch.id}:`, error);
-        throw error;
-      }
-    });
+    this.db = BatchServiceDatabase.getInstance();
   }
 
-  async loadExistingBatches(): Promise<void> {
+  async startPeriodicCheck(intervalSeconds: number = 10): Promise<void> {
     try {
-      this.logger.info('Loading existing batches...');
-      const batches = await loadBatches();
-      
-      for (const batch of batches) {
-        if (batch.isActive) {
-          await this.scheduleBatch(batch);
-          this.logger.info(`Loaded and scheduled batch: ${batch.id}`);
+      await this.db.initialize();
+      this.logger.info(`Starting periodic batch check every ${intervalSeconds} seconds`);
+
+      setInterval(async () => {
+        try {
+          await this.checkAndScheduleBatches();
+        } catch (error) {
+          this.logger.error('Error during batch check:', error);
         }
-      }
-      
-      this.logger.info(`Loaded ${batches.length} batches`);
+      }, intervalSeconds * 1000);
+
+      await this.checkAndScheduleBatches();
     } catch (error) {
-      this.logger.error('Failed to load existing batches', error);
+      this.logger.error('Failed to start periodic check:', error);
       throw error;
     }
   }
 
-  async scheduleBatch(config: BatchConfig): Promise<void> {
-    if (this.activeTasks.has(config.id)) {
-      await this.stopBatch(config.id);
-    }
+  private async checkAndScheduleBatches(): Promise<void> {
+    const now = new Date();
+    this.logger.info('Checking for batches to schedule...');
 
-    const tasks: ScheduledTask[] = [];
+    try {
+      const batches = await this.db.batches.find({ isActive: true });
+      this.logger.info(`Found ${batches.length} active batches`);
 
-    if (config.schedule.type === 'periodic' && config.schedule.cronExpression) {
-      const task = schedule(config.schedule.cronExpression, async () => {
-        await this.queueManager.addToQueue(config)
-          .catch(error => this.logger.error(`Failed to queue batch ${config.id}`, error));
-      });
-      tasks.push(task);
-      
-    } else if (config.schedule.type === 'specific' && config.schedule.executionDates?.length) {
-      for (const dateStr of config.schedule.executionDates) {
-        const executeTime = new Date(dateStr);
-        if (executeTime > new Date()) {
-          const task = this.scheduleOneTimeExecution(config, executeTime);
-          if (task) tasks.push(task);
+      for (const batch of batches) {
+        if (await this.shouldScheduleBatch(batch, now)) {
+          await this.scheduleBatch(batch);
         }
       }
-    }
-
-    if (tasks.length > 0) {
-      this.activeTasks.set(config.id, tasks);
-      this.logger.info(`Scheduled batch ${config.id} with ${tasks.length} execution(s)`);
+    } catch (error) {
+      this.logger.error('Error checking batches:', error);
     }
   }
 
-  private scheduleOneTimeExecution(config: BatchConfig, executeTime: Date): ScheduledTask | null {
-    const now = new Date();
-    const delay = executeTime.getTime() - now.getTime();
-    
-    if (delay <= 0) return null;
+  private async shouldScheduleBatch(batch: BatchConfig, now: Date): Promise<boolean> {
+    if (!batch.schedule) return false;
 
-    const timeoutId = setTimeout(async () => {
-      await this.queueManager.addToQueue(config)
-        .catch(error => this.logger.error(`Failed to queue batch ${config.id}`, error));
-    }, delay);
+    try {
+      if (batch.schedule.type === 'periodic' && batch.schedule.cronExpression) {
+        const interval = cronParser.parseExpression(batch.schedule.cronExpression);
+        const nextRun = interval.next().toDate();
+        const diffSeconds = Math.abs((nextRun.getTime() - now.getTime()) / 1000);
 
-    return {
-      stop: () => clearTimeout(timeoutId)
-    } as ScheduledTask;
-  }
+        if (diffSeconds <= 60) {
+          const lastRun = batch.lastExecutedAt ? new Date(batch.lastExecutedAt) : null;
+          if (!lastRun || (now.getTime() - lastRun.getTime()) >= 60000) {
+            this.logger.info(`Scheduling periodic batch: ${batch.id}`, {
+              nextRun,
+              lastRun
+            });
+            return true;
+          }
+        }
+      }
 
-  async stopBatch(batchId: string): Promise<void> {
-    const tasks = this.activeTasks.get(batchId);
-    if (tasks) {
-      tasks.forEach(task => task.stop());
-      this.activeTasks.delete(batchId);
-      this.logger.info(`Stopped batch ${batchId}`);
+      if (batch.schedule.type === 'specific' && Array.isArray(batch.schedule.executionDates)) {
+        for (const dateStr of batch.schedule.executionDates) {
+          const executeTime = new Date(dateStr);
+          const diffSeconds = Math.abs((executeTime.getTime() - now.getTime()) / 1000);
+
+          if (diffSeconds <= 60) {
+            const lastRun = batch.lastExecutedAt ? new Date(batch.lastExecutedAt) : null;
+            if (!lastRun || lastRun.getTime() < executeTime.getTime()) {
+              this.logger.info(`Scheduling specific time batch: ${batch.id}`, {
+                executeTime,
+                lastRun
+              });
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      this.logger.error(`Error checking schedule for batch ${batch.id}:`, error);
+      return false;
     }
   }
 
-  async stopAllBatches(): Promise<void> {
-    for (const [batchId, tasks] of this.activeTasks) {
-      tasks.forEach(task => task.stop());
-      this.logger.info(`Stopped batch ${batchId}`);
+  private async scheduleBatch(batch: BatchConfig): Promise<void> {
+    try {
+      const data = await this.datasetService.getDatasetData(batch.datasetId);
+      if (!data) {
+        throw new Error(`Dataset not found: ${batch.datasetId}`);
+      }
+
+      if (batch.schedule.useRandomDelay) {
+        const delay = Math.floor(Math.random() * (5 * 60 * 1000)); // 0-5분
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const result = await this.batchExecutor.executeBatch(batch);
+      this.logger.info(`Batch executed successfully: ${batch.id}`, result);
+    } catch (error) {
+      this.logger.error(`Failed to execute batch ${batch.id}:`, error);
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    this.logger.info('Shutting down batch scheduler...');
+    for (const tasks of this.activeTasks.values()) {
+      for (const task of tasks) {
+        task.stop();
+      }
     }
     this.activeTasks.clear();
-    this.queueManager.clearQueue();
-    this.logger.info('Stopped all batches');
-  }
-
-  setMaxConcurrent(value: number): void {
-    this.queueManager.setMaxConcurrent(value);
-  }
-
-  getQueueStatus() {
-    return this.queueManager.getQueueStatus();
   }
 }

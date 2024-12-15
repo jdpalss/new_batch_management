@@ -2,12 +2,12 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import { Card, CardBody, CardHeader, Badge, Button } from 'reactstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useToasts } from '../../hooks/useToasts';
-import { BatchService } from '../../services/api';
-import { BatchConfig } from '../../types/batch';
-import { Template } from '../../types/template';
-import { Dataset } from '../../types/dataset';
-import { formatDateTime } from '../../utils/date';
+import { useToasts } from '@/hooks/useToasts';
+import { apiService } from '@/services/api';
+import { BatchConfig } from '@/types/batch';
+import { Template } from '@/types/template';
+import { Dataset } from '@/types/dataset';
+import { formatDateTime } from '@/utils/date';
 
 interface BatchDetailsProps {
   batch: BatchConfig;
@@ -25,14 +25,15 @@ export const BatchDetails: React.FC<BatchDetailsProps> = ({
   const toasts = useToasts();
 
   // 배치 삭제
-  const { mutate: deleteBatch } = useMutation({
-    mutationFn: () => BatchService.delete(batch.id),
+  const deleteMutation = useMutation({
+    mutationFn: () => apiService.batch.delete(batch.id),
     onSuccess: () => {
       toasts.addToast({
         type: 'success',
         title: '배치 삭제',
         message: '배치가 삭제되었습니다.'
       });
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
       router.push('/batch');
     },
     onError: (error: Error) => {
@@ -45,12 +46,13 @@ export const BatchDetails: React.FC<BatchDetailsProps> = ({
   });
 
   // 배치 활성화/비활성화
-  const { mutate: toggleActive } = useMutation({
-    mutationFn: () => BatchService.update(batch.id, { 
+  const toggleMutation = useMutation({
+    mutationFn: () => apiService.batch.update(batch.id, { 
       isActive: !batch.isActive 
     }),
     onSuccess: (updatedBatch) => {
       queryClient.setQueryData(['batch', batch.id], updatedBatch);
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
       toasts.addToast({
         type: 'success',
         title: '배치 상태 변경',
@@ -67,15 +69,21 @@ export const BatchDetails: React.FC<BatchDetailsProps> = ({
   });
 
   // 배치 실행
-  const { mutate: executeBatch } = useMutation({
-    mutationFn: () => BatchService.execute(batch.id),
+  const executeMutation = useMutation({
+    mutationFn: () => apiService.batch.execute(batch.id),
     onSuccess: () => {
       toasts.addToast({
         type: 'success',
         title: '배치 실행',
         message: '배치가 실행되었습니다.'
       });
-      queryClient.invalidateQueries(['batch', batch.id]);
+      queryClient.invalidateQueries({ 
+        queryKey: ['batch', batch.id]
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['batches'],
+        exact: false
+      });
     },
     onError: (error: Error) => {
       toasts.addToast({
@@ -85,6 +93,8 @@ export const BatchDetails: React.FC<BatchDetailsProps> = ({
       });
     }
   });
+
+  const isLoading = deleteMutation.isPending || toggleMutation.isPending || executeMutation.isPending;
 
   return (
     <Card className="mb-4">
@@ -96,6 +106,7 @@ export const BatchDetails: React.FC<BatchDetailsProps> = ({
             size="sm"
             className="me-2"
             onClick={() => router.push(`/batch/edit/${batch.id}`)}
+            disabled={isLoading}
           >
             수정
           </Button>
@@ -103,7 +114,8 @@ export const BatchDetails: React.FC<BatchDetailsProps> = ({
             color={batch.isActive ? "warning" : "success"}
             size="sm"
             className="me-2"
-            onClick={() => toggleActive()}
+            onClick={() => toggleMutation.mutate()}
+            disabled={isLoading}
           >
             {batch.isActive ? '비활성화' : '활성화'}
           </Button>
@@ -111,10 +123,11 @@ export const BatchDetails: React.FC<BatchDetailsProps> = ({
             color="danger"
             size="sm"
             onClick={() => {
-              if (window.confirm('정말 삭제하시겠습니까?')) {
-                deleteBatch();
+              if (window.confirm('이 배치를 삭제하시겠습니까?')) {
+                deleteMutation.mutate();
               }
             }}
+            disabled={isLoading}
           >
             삭제
           </Button>
@@ -181,10 +194,10 @@ export const BatchDetails: React.FC<BatchDetailsProps> = ({
         <div className="mt-3">
           <Button
             color="primary"
-            onClick={() => executeBatch()}
-            disabled={!batch.isActive}
+            onClick={() => executeMutation.mutate()}
+            disabled={!batch.isActive || isLoading}
           >
-            지금 실행
+            {executeMutation.isPending ? '실행 중...' : '지금 실행'}
           </Button>
         </div>
       </CardBody>

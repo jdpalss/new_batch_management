@@ -1,82 +1,73 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import {
-  Card,
-  CardHeader,
-  CardBody,
-  Table,
-  Badge
+import { 
+  Card, 
+  CardHeader, 
+  CardBody, 
+  Badge,
+  Spinner 
 } from 'reactstrap';
+import { useQuery } from '@tanstack/react-query';
+import { apiService } from '../../services/api';
 import { formatDateTime } from '@/utils/date';
-import { BatchService } from '@/services/api';
 
 interface BatchLogsProps {
   batchId: string;
 }
 
 export const BatchLogs: React.FC<BatchLogsProps> = ({ batchId }) => {
-  const { data: logs = [], isLoading } = useQuery({
-    queryKey: ['batchLogs', batchId],
-    queryFn: () => BatchService.getLogs(batchId),
-    refetchInterval: 5000 // 5초마다 갱신
+  const { data: logs, isLoading } = useQuery({
+    queryKey: ['batch-logs', batchId],
+    queryFn: () => apiService.batch.getLogs(batchId),
+    refetchInterval: 5000 // 5초마다 자동 갱신
   });
 
+  if (isLoading) {
+    return (
+      <Card>
+        <CardBody className="text-center py-5">
+          <Spinner color="primary" />
+        </CardBody>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="mb-4">
+    <Card>
       <CardHeader>
         <h4 className="mb-0">실행 로그</h4>
       </CardHeader>
       <CardBody>
-        {isLoading ? (
-          <div className="text-center p-3">
-            <div className="spinner-border text-primary" role="status">
-              <span className="visually-hidden">로딩중...</span>
-            </div>
-          </div>
-        ) : logs.length === 0 ? (
-          <div className="text-center text-muted p-3">
-            로그가 없습니다.
+        {logs?.length === 0 ? (
+          <div className="text-center text-muted py-4">
+            실행 로그가 없습니다.
           </div>
         ) : (
-          <div className="table-responsive">
-            <Table className="mb-0">
-              <thead>
-                <tr>
-                  <th>시간</th>
-                  <th>수준</th>
-                  <th>메시지</th>
-                  <th>메타데이터</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log, index) => (
-                  <tr key={index}>
-                    <td className="text-nowrap">
-                      {formatDateTime(new Date(log.timestamp))}
-                    </td>
-                    <td>
-                      <Badge
-                        color={
-                          log.level === 'error' ? 'danger' :
-                          log.level === 'warn' ? 'warning' : 
-                          'info'
-                        }
-                      >
-                        {log.level.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td>{log.message}</td>
-                    <td>
-                      {log.metadata && (
-                        <pre className="mb-0 small">
-                          {JSON.stringify(log.metadata, null, 2)}
-                        </pre>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+          <div className="log-entries" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            {logs?.map((log, index) => (
+              <div key={index} className="log-entry mb-2 pb-2 border-bottom">
+                <div className="d-flex justify-content-between align-items-start mb-1">
+                  <div>
+                    <Badge 
+                      color={log.level === 'error' ? 'danger' : 'info'}
+                      className="me-2"
+                    >
+                      {log.level.toUpperCase()}
+                    </Badge>
+                    <span className="text-muted small">
+                      {formatDateTime(log.timestamp)}
+                    </span>
+                  </div>
+                </div>
+                <div className="log-message">
+                  {log.message}
+                  {log.metadata && (
+                    <pre className="mt-1 mb-0 bg-light p-2 rounded small">
+                      {JSON.stringify(log.metadata, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </CardBody>

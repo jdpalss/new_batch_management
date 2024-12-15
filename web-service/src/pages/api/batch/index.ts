@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { stores } from '../../../lib/db';
-import { BatchConfig } from '../../../types/batch';
+import { collections, initializeDatabase } from '../../../lib/db-client';
 import { logger } from '../../../utils/logger';
 import { validateBatchConfig } from '../../../utils/validation';
 
@@ -9,29 +8,12 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
+    // DB 초기화 확인
+    await initializeDatabase();
+
     switch (req.method) {
       case 'GET':
-        const batches = await new Promise<BatchConfig[]>((resolve, reject) => {
-          stores.batches.find({}, (err: any, docs: BatchConfig[]) => {
-            if (err) reject(err);
-            // DB 인스턴스 제외한 순수 데이터만 반환
-            const cleanBatches = docs.map(doc => ({
-              id: doc.id,
-              title: doc.title,
-              description: doc.description,
-              templateId: doc.templateId,
-              datasetId: doc.datasetId,
-              isActive: doc.isActive,
-              schedule: doc.schedule,
-              lastExecutedAt: doc.lastExecutedAt,
-              nextExecutionAt: doc.nextExecutionAt,
-              createdAt: doc.createdAt,
-              updatedAt: doc.updatedAt
-            }));
-            resolve(cleanBatches);
-          });
-        });
-
+        const batches = await collections.batches.find(req.query);
         return res.status(200).json(batches);
 
       case 'POST':
@@ -43,39 +25,13 @@ export default async function handler(
           // 배치 설정 유효성 검사
           await validateBatchConfig(req.body);
 
-          const newBatch: BatchConfig = {
-            id: Date.now().toString(),
-            ...req.body,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-
-          const savedBatch = await new Promise((resolve, reject) => {
-            stores.batches.insert(newBatch, (err: any, doc: BatchConfig) => {
-              if (err) reject(err);
-              // DB 인스턴스 제외한 순수 데이터만 반환
-              const cleanBatch = {
-                id: doc.id,
-                title: doc.title,
-                description: doc.description,
-                templateId: doc.templateId,
-                datasetId: doc.datasetId,
-                isActive: doc.isActive,
-                schedule: doc.schedule,
-                lastExecutedAt: doc.lastExecutedAt,
-                nextExecutionAt: doc.nextExecutionAt,
-                createdAt: doc.createdAt,
-                updatedAt: doc.updatedAt
-              };
-              resolve(cleanBatch);
-            });
-          });
-
-          logger.info('Created new batch', { batchId: newBatch.id });
-          return res.status(201).json(savedBatch);
+          // 새 배치 생성
+          const newBatch = await collections.batches.insert(req.body);
+          logger.info(`Created new batch: ${newBatch.id}`);
           
+          return res.status(201).json(newBatch);
         } catch (error) {
-          logger.error('Error creating batch', error);
+          logger.error('Error creating batch:', error);
           return res.status(400).json({ 
             error: error instanceof Error ? error.message : '배치 생성 중 오류가 발생했습니다.'
           });
@@ -86,7 +42,7 @@ export default async function handler(
         return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
     }
   } catch (error) {
-    logger.error('API error', error);
+    logger.error('API Error:', error);
     return res.status(500).json({ 
       error: error instanceof Error ? error.message : '서버 오류가 발생했습니다.'
     });

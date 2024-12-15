@@ -1,6 +1,6 @@
 import { Logger } from '../utils/logger';
 import { BatchConfig, BatchStatus } from '../types/batch';
-import { DatasetService } from '../services/datasetService';
+import { DatasetService } from '@batch-automation/shared';
 import config from '../config';
 
 interface QueueItem {
@@ -18,8 +18,8 @@ export class BatchQueueManager {
   private executeBatchFn: (batch: BatchConfig, data: any) => Promise<any>;
 
   constructor(
-    logger: Logger, 
-    datasetService: DatasetService, 
+    logger: Logger,
+    datasetService: DatasetService,
     maxConcurrent?: number
   ) {
     this.logger = logger;
@@ -53,20 +53,11 @@ export class BatchQueueManager {
       this.logger.info(`Starting batch execution: ${item.batch.id}. Running jobs: ${this.runningCount}`);
 
       try {
-        // 데이터셋 로드
         const data = await this.loadBatchData(item.batch);
-        
-        // 로드된 데이터 확인
-        this.logger.info(`Loaded data for batch ${item.batch.id}:`, {
-          datasetId: item.batch.datasetId,
-          dataPreview: JSON.stringify(data).substring(0, 200)
-        });
-
         if (!data) {
           throw new Error(`No data available for batch ${item.batch.id}`);
         }
 
-        // 배치 실행
         const result = await this.executeBatchFn(item.batch, data);
         item.resolve(result);
 
@@ -76,7 +67,6 @@ export class BatchQueueManager {
       } finally {
         this.runningCount--;
         this.logger.info(`Completed batch execution: ${item.batch.id}. Running jobs: ${this.runningCount}`);
-        // 큐에 남은 작업이 있으면 계속 처리
         setImmediate(() => this.processQueue());
       }
     }
@@ -96,15 +86,6 @@ export class BatchQueueManager {
       this.logger.error(`Failed to load data for batch: ${batch.id}`, error);
       throw error;
     }
-  }
-
-  setMaxConcurrent(value: number) {
-    if (value < 1) {
-      throw new Error('Max concurrent jobs must be greater than 0');
-    }
-    this.maxConcurrent = value;
-    this.logger.info(`Updated max concurrent jobs to: ${value}`);
-    this.processQueue();
   }
 
   getQueueStatus() {

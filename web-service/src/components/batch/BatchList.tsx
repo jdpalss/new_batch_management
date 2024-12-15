@@ -3,27 +3,24 @@ import {
   Card, 
   CardHeader, 
   CardBody, 
-  Table, 
-  Badge, 
+  Table,
+  Badge,
   Button,
   Input,
   Row,
   Col,
-  ButtonGroup
+  ButtonGroup,
+  Spinner
 } from 'reactstrap';
 import { Play, Pause, Edit, Trash2, Info } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/router';
+import Link from 'next/link';
+import { apiService } from '@/services/api';
 import { BatchWithDetails, BatchStatus } from '@/types/batch';
 import { formatDateTime, formatRelativeTime } from '@/utils/date';
 import { describeCronExpression } from '@/utils/cronUtils';
-import Link from 'next/link';
-
-interface BatchListProps {
-  batches: BatchWithDetails[];
-  onEdit: (batch: BatchWithDetails) => void;
-  onDelete: (batch: BatchWithDetails) => void;
-  onToggleActive: (batch: BatchWithDetails) => void;
-  isLoading?: boolean;
-}
+import { useToasts } from '@/hooks/useToasts';
 
 const statusColors: Record<BatchStatus, string> = {
   [BatchStatus.PENDING]: 'info',
@@ -33,17 +30,79 @@ const statusColors: Record<BatchStatus, string> = {
   [BatchStatus.INACTIVE]: 'secondary'
 };
 
-const BatchList: React.FC<BatchListProps> = ({
-  batches,
-  onEdit,
-  onDelete,
-  onToggleActive,
-  isLoading
-}) => {
+export const BatchList: React.FC = () => {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const toasts = useToasts();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<BatchStatus | ''>('');
 
-  const filteredBatches = batches.filter(batch => {
+  // 배치 목록 조회
+  const { data: batches, isLoading } = useQuery({
+    queryKey: ['batches'],
+    queryFn: () => apiService.batch.list()
+  });
+
+  // 배치 삭제
+  const deleteMutation = useMutation({
+    mutationFn: apiService.batch.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
+      toasts.addToast({
+        type: 'success',
+        title: '배치 삭제',
+        message: '배치가 삭제되었습니다.'
+      });
+    },
+    onError: (error: Error) => {
+      toasts.addToast({
+        type: 'error',
+        title: '배치 삭제 실패',
+        message: error.message
+      });
+    }
+  });
+
+  // 배치 활성화/비활성화
+  const toggleMutation = useMutation({
+    mutationFn: (batch: BatchWithDetails) => 
+      apiService.batch.update(batch.id, { isActive: !batch.isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
+    },
+    onError: (error: Error) => {
+      toasts.addToast({
+        type: 'error',
+        title: '상태 변경 실패',
+        message: error.message
+      });
+    }
+  });
+
+  // 배치 실행
+  const executeMutation = useMutation({
+    mutationFn: apiService.batch.execute,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['batches'],
+        exact: false 
+      });
+      toasts.addToast({
+        type: 'success',
+        title: '배치 실행',
+        message: '배치가 실행되었습니다.'
+      });
+    },
+    onError: (error: Error) => {
+      toasts.addToast({
+        type: 'error',
+        title: '실행 실패',
+        message: error.message
+      });
+    }
+  });
+
+  const filteredBatches = batches?.filter(batch => {
     const matchesSearch = 
       batch.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       batch.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -53,55 +112,36 @@ const BatchList: React.FC<BatchListProps> = ({
     const matchesStatus = statusFilter ? batch.status === statusFilter : true;
 
     return matchesSearch && matchesStatus;
-  });
+  }) ?? [];
 
   const renderSchedule = (batch: BatchWithDetails) => {
-    if (batch.schedule.type === 'cron') {
+    if (batch.schedule.type === 'periodic') {
       return (
         <div>
           <small className="d-block text-muted">
-            {describeCronExpression(batch.schedule.value as string)}
+            {describeCronExpression(batch.schedule.cronExpression || '')}
           </small>
-          <code className="small">{batch.schedule.value}</code>
+          <code className="small">{batch.schedule.cronExpression}</code>
         </div>
       );
     }
 
-    const times = Array.isArray(batch.schedule.value) 
-      ? batch.schedule.value 
-      : [batch.schedule.value];
-
     return (
       <div>
         <small className="d-block text-muted">
-          {times.length} execution time{times.length > 1 ? 's' : ''}
+          {batch.schedule.executionDates?.length} execution time(s)
         </small>
-        {times.slice(0, 2).map((time, index) => (
+        {batch.schedule.executionDates?.slice(0, 2).map((date, index) => (
           <div key={index} className="small">
-            {formatDateTime(time)}
+            {formatDateTime(date)}
           </div>
         ))}
-        {times.length > 2 && (
+        {batch.schedule.executionDates && batch.schedule.executionDates.length > 2 && (
           <small className="text-muted">
-            +{times.length - 2} more
+            +{batch.schedule.executionDates.length - 2} more
           </small>
         )}
       </div>
-    );
-  };
-
-  const renderNextExecution = (batch: BatchWithDetails) => {
-    if (!batch.isActive || !batch.nextExecutionTime) {
-      return '-';
-    }
-
-    return (
-      <>
-        <div>{formatDateTime(batch.nextExecutionTime)}</div>
-        <small className="text-muted">
-          {formatRelativeTime(batch.nextExecutionTime)}
-        </small>
-      </>
     );
   };
 
@@ -109,9 +149,7 @@ const BatchList: React.FC<BatchListProps> = ({
     return (
       <Card>
         <CardBody className="text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
+          <Spinner color="primary" />
         </CardBody>
       </Card>
     );
@@ -161,15 +199,15 @@ const BatchList: React.FC<BatchListProps> = ({
                 <th>Template</th>
                 <th>Dataset</th>
                 <th>Schedule</th>
-                <th>Next Run</th>
                 <th>Status</th>
                 <th>Last Run</th>
+                <th>Next Run</th>
                 <th className="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredBatches.map((batch) => (
-                <tr key={batch._id}>
+                <tr key={batch.id}>
                   <td>
                     <div className="fw-semibold">{batch.title}</div>
                     {batch.description && (
@@ -187,23 +225,34 @@ const BatchList: React.FC<BatchListProps> = ({
                     </Badge>
                   </td>
                   <td>{renderSchedule(batch)}</td>
-                  <td>{renderNextExecution(batch)}</td>
                   <td>
-                    <Badge color={statusColors[batch.status || BatchStatus.PENDING]}>
+                    <Badge color={statusColors[batch.status]}>
                       {batch.status}
                     </Badge>
-                    {batch.schedule.useRandomDelay && (
+                    {batch.schedule.randomDelay && (
                       <Badge color="warning" pill className="ms-1">
                         Random
                       </Badge>
                     )}
                   </td>
                   <td>
-                    {batch.lastRunAt ? (
+                    {batch.lastRun ? (
                       <>
-                        <div>{formatDateTime(batch.lastRunAt)}</div>
+                        <div>{formatDateTime(batch.lastRun)}</div>
                         <small className="text-muted">
-                          {formatRelativeTime(batch.lastRunAt)}
+                          {formatRelativeTime(batch.lastRun)}
+                        </small>
+                      </>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td>
+                    {batch.nextRun ? (
+                      <>
+                        <div>{formatDateTime(batch.nextRun)}</div>
+                        <small className="text-muted">
+                          {formatRelativeTime(batch.nextRun)}
                         </small>
                       </>
                     ) : (
@@ -212,15 +261,16 @@ const BatchList: React.FC<BatchListProps> = ({
                   </td>
                   <td>
                     <ButtonGroup size="sm">
-                      <Link href={`/batch/${batch._id}`} passHref>
+                      <Link href={`/batch/${batch.id}`} passHref>
                         <Button color="light" title="View Details">
                           <Info size={16} />
                         </Button>
                       </Link>
                       <Button
                         color="light"
-                        onClick={() => onToggleActive(batch)}
+                        onClick={() => toggleMutation.mutate(batch)}
                         title={batch.isActive ? 'Deactivate' : 'Activate'}
+                        disabled={toggleMutation.isPending}
                       >
                         {batch.isActive ? (
                           <Pause size={16} />
@@ -230,16 +280,20 @@ const BatchList: React.FC<BatchListProps> = ({
                       </Button>
                       <Button
                         color="light"
-                        onClick={() => onEdit(batch)}
+                        onClick={() => router.push(`/batch/edit/${batch.id}`)}
                         title="Edit"
                       >
                         <Edit size={16} />
                       </Button>
                       <Button
                         color="light"
-                        onClick={() => onDelete(batch)}
+                        onClick={() => {
+                          if (window.confirm('이 배치를 삭제하시겠습니까?')) {
+                            deleteMutation.mutate(batch.id);
+                          }
+                        }}
                         title="Delete"
-                        disabled={batch.isActive}
+                        disabled={batch.isActive || deleteMutation.isPending}
                       >
                         <Trash2 size={16} />
                       </Button>
@@ -252,11 +306,11 @@ const BatchList: React.FC<BatchListProps> = ({
                   <td colSpan={8} className="text-center py-4">
                     {searchTerm || statusFilter ? (
                       <div className="text-muted">
-                        No batch jobs found matching your criteria
+                        검색 조건에 맞는 배치가 없습니다.
                       </div>
                     ) : (
                       <div className="text-muted">
-                        No batch jobs available
+                        등록된 배치가 없습니다.
                       </div>
                     )}
                   </td>
@@ -269,5 +323,3 @@ const BatchList: React.FC<BatchListProps> = ({
     </Card>
   );
 };
-
-export default BatchList;
